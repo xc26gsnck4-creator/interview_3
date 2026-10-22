@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Invoices\Models;
 
 use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Tests\TestCase;
@@ -54,5 +55,22 @@ final class InvoiceTest extends TestCase
 
         $this->assertCount(3, $invoice->productLines);
         $this->assertDatabaseCount('invoice_product_lines', 3);
+    }
+
+    public function test_new_invoice_cannot_be_saved_with_a_non_draft_status(): void
+    {
+        $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
+        $invoice->status = StatusEnum::Sending;
+
+        $this->assertThrows(fn () => $invoice->save(), InvoiceMustBeCreatedAsDraft::class);
+        $this->assertDatabaseCount('invoices', 0);
+    }
+
+    public function test_factory_states_combine_with_lines(): void
+    {
+        $invoice = Invoice::factory()->sending()->withLines(2)->create();
+
+        $this->assertSame(StatusEnum::Sending, $invoice->fresh()?->status);
+        $this->assertDatabaseCount('invoice_product_lines', 2);
     }
 }

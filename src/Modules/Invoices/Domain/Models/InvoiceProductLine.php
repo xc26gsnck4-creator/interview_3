@@ -26,6 +26,14 @@ final class InvoiceProductLine extends Model
     use HasUuids;
 
     /**
+     * The `integer` column range; also keeps quantity * unit_price inside PHP's int.
+     */
+    public const int MAX_VALUE = 2_147_483_647;
+
+    /**
+     * `invoice_id` is deliberately not fillable: lines are created through
+     * Invoice::productLines().
+     *
      * @var list<string>
      */
     protected $fillable = ['name', 'quantity', 'unit_price'];
@@ -52,18 +60,32 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Enforces the line invariant on every insert and update: quantity and
-     * unit price must both be at least 1.
+     * Enforces the line invariant on every Eloquent save (create and update):
+     * quantity and unit price must be integers between 1 and MAX_VALUE. The raw
+     * attribute is validated, not the cast value, so 1.5 or '2widgets' cannot be
+     * silently truncated. Query-builder writes bypass model events by Eloquent
+     * design, and the schema is fixed by the task.
      */
     protected static function booted(): void
     {
         self::saving(static function (InvoiceProductLine $line): void {
-            $values = ['quantity' => $line->quantity, 'unit_price' => $line->unit_price];
+            foreach (['quantity', 'unit_price'] as $field) {
+                $raw = $line->getAttributes()[$field] ?? null;
+                $value = filter_var($raw, FILTER_VALIDATE_INT);
 
-            foreach ($values as $field => $value) {
+                if ($value === false) {
+                    throw InvalidProductLine::notAnInteger($field, $raw);
+                }
+
                 if ($value < 1) {
                     throw InvalidProductLine::nonPositive($field, $value);
                 }
+
+                if ($value > self::MAX_VALUE) {
+                    throw InvalidProductLine::tooLarge($field, $value);
+                }
+
+                $line->setAttribute($field, $value);
             }
         });
     }

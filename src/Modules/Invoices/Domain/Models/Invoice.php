@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 
 /**
  * @property string $id
@@ -58,6 +59,20 @@ final class Invoice extends Model
     protected function casts(): array
     {
         return ['status' => StatusEnum::class];
+    }
+
+    /**
+     * Mass assignment cannot set status; this hook closes the direct-assignment
+     * path ($invoice->status = ...; $invoice->save()), so an invoice can only
+     * ever be created as draft.
+     */
+    protected static function booted(): void
+    {
+        self::creating(static function (Invoice $invoice): void {
+            if ($invoice->status !== StatusEnum::Draft) {
+                throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
+            }
+        });
     }
 
     protected static function newFactory(): InvoiceFactory
