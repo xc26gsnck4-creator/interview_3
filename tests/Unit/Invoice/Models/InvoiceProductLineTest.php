@@ -128,6 +128,8 @@ final class InvoiceProductLineTest extends TestCase
 
         $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
         $this->assertThrows(fn () => $line->increment('quantity'), InvalidProductLine::class);
+        $this->assertThrows(fn () => $line->incrementEach(['quantity' => 1]), InvalidProductLine::class);
+        $this->assertThrows(fn () => $line->decrementEach(['quantity' => 1]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
     }
 

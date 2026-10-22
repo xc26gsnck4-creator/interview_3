@@ -75,6 +75,18 @@ final class InvoiceProductLine extends Model
     }
 
     /**
+     * Same rule as incrementOrDecrement(), for the incrementEach and
+     * decrementEach variants.
+     *
+     * @param  array<string, float|int>  $columns
+     * @param  array<string, mixed>  $extra
+     */
+    protected function incrementOrDecrementEach(array $columns, array $extra, string $method): never
+    {
+        throw InvalidProductLine::arithmeticNotAllowed((string) (array_key_first($columns) ?? 'quantity'));
+    }
+
+    /**
      * Registers the line invariants on creating and updating, so each Eloquent
      * write path (create, save, update) validates exactly once; increment and
      * decrement are rejected outright. A line must belong to an invoice, so it is
