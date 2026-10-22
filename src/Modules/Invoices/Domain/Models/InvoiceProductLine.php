@@ -58,12 +58,12 @@ final class InvoiceProductLine extends Model
     protected static function booted(): void
     {
         self::saving(static function (InvoiceProductLine $line): void {
-            if ($line->quantity < 1) {
-                throw InvalidProductLine::nonPositive('quantity', $line->quantity);
-            }
+            $values = ['quantity' => $line->quantity, 'unit_price' => $line->unit_price];
 
-            if ($line->unit_price < 1) {
-                throw InvalidProductLine::nonPositive('unit_price', $line->unit_price);
+            foreach ($values as $field => $value) {
+                if ($value < 1) {
+                    throw InvalidProductLine::nonPositive($field, $value);
+                }
             }
         });
     }

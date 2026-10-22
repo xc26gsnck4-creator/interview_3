@@ -22,41 +22,33 @@ final class InvoiceProductLineTest extends TestCase
     {
         $line = InvoiceProductLine::factory()->create(['quantity' => 1, 'unit_price' => 1]);
 
-        $fresh = $line->fresh();
-        $this->assertSame(1, $fresh?->quantity);
-        $this->assertSame(1, $fresh->unit_price);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1, 'unit_price' => 1]);
         $this->assertDatabaseCount('invoice_product_lines', 1);
     }
 
     /**
-     * @return array<string, array{int}>
+     * @return array<string, array{'quantity'|'unit_price', int}>
      */
     public static function nonPositiveValues(): array
     {
-        return ['zero' => [0], 'negative' => [-1]];
+        return [
+            'quantity zero' => ['quantity', 0],
+            'quantity negative' => ['quantity', -1],
+            'unit price zero' => ['unit_price', 0],
+            'unit price negative' => ['unit_price', -1],
+        ];
     }
 
+    /**
+     * @param  'quantity'|'unit_price'  $field
+     */
     #[DataProvider('nonPositiveValues')]
-    public function test_rejects_non_positive_quantity(int $quantity): void
+    public function test_rejects_non_positive_values(string $field, int $value): void
     {
-        $this->expectException(InvalidProductLine::class);
-
-        try {
-            InvoiceProductLine::factory()->create(['quantity' => $quantity]);
-        } finally {
-            $this->assertDatabaseCount('invoice_product_lines', 0);
-        }
-    }
-
-    #[DataProvider('nonPositiveValues')]
-    public function test_rejects_non_positive_unit_price(int $unitPrice): void
-    {
-        $this->expectException(InvalidProductLine::class);
-
-        try {
-            InvoiceProductLine::factory()->create(['unit_price' => $unitPrice]);
-        } finally {
-            $this->assertDatabaseCount('invoice_product_lines', 0);
-        }
+        $this->assertThrows(
+            fn () => InvoiceProductLine::factory()->create([$field => $value]),
+            InvalidProductLine::class,
+        );
+        $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 }

@@ -35,7 +35,7 @@ final class Invoice extends Model
     /**
      * @var array<string, mixed>
      */
-    protected $attributes = ['status' => 'draft'];
+    protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
      * @return HasMany<InvoiceProductLine, $this>
