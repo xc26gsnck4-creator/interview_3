@@ -66,12 +66,12 @@ final class InvoiceProductLine extends Model
      *
      * @param  string  $column
      * @param  float|int  $amount
-     * @param  array<string, mixed>  $extra
+     * @param  array<array-key, mixed>  $extra
      * @param  string  $method
      */
     protected function incrementOrDecrement($column, $amount, $extra, $method): never
     {
-        throw InvalidProductLine::arithmeticNotAllowed((string) $column);
+        throw InvalidProductLine::arithmeticNotAllowed($column);
     }
 
     /**
@@ -83,7 +83,7 @@ final class InvoiceProductLine extends Model
      */
     protected function incrementOrDecrementEach(array $columns, array $extra, string $method): never
     {
-        throw InvalidProductLine::arithmeticNotAllowed((string) (array_key_first($columns) ?? 'quantity'));
+        throw InvalidProductLine::arithmeticNotAllowed(array_key_first($columns) ?? 'quantity');
     }
 
     /**

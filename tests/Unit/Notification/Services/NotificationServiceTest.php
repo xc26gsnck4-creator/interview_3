@@ -32,7 +32,7 @@ final class NotificationServiceTest extends TestCase
     {
         $this->dispatcher->expects($this->once())
             ->method('dispatch')
-            ->with($this->isInstanceOf(WebhookDeliveredEvent::class));
+            ->with(self::isInstanceOf(WebhookDeliveredEvent::class));
 
         $this->notificationService->delivered(Uuid::fromString($this->faker->uuid()));
     }
