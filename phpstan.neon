@@ -58,6 +58,12 @@ parameters:
                 - 'ray()'
             message: 'debug output must not be committed'
 
+    # Instance calls. The same lists appear under disallowedStaticCalls because
+    # spaze keeps the two call kinds apart and Larastan resolves static calls on
+    # a model (Invoice::whereRaw(), Invoice::dd()) to the Eloquent builder and
+    # DB facade calls to the connection; an entry on the facade name never
+    # matches. One ConnectionInterface entry covers DB::select(), the facade's
+    # DB::connection() and an injected connection alike.
     disallowedMethodCalls:
         -
             method:
@@ -69,20 +75,41 @@ parameters:
         -
             method:
                 - 'Illuminate\Database\ConnectionInterface::raw()'
+                - 'Illuminate\Database\ConnectionInterface::select()'
+                - 'Illuminate\Database\ConnectionInterface::selectOne()'
+                - 'Illuminate\Database\ConnectionInterface::scalar()'
+                - 'Illuminate\Database\ConnectionInterface::cursor()'
+                - 'Illuminate\Database\ConnectionInterface::insert()'
+                - 'Illuminate\Database\ConnectionInterface::update()'
+                - 'Illuminate\Database\ConnectionInterface::delete()'
                 - 'Illuminate\Database\ConnectionInterface::statement()'
+                - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
                 - 'Illuminate\Database\ConnectionInterface::unprepared()'
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
-            message: 'raw SQL bypasses bindings; use the query builder'
+            message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
 
-    # Larastan resolves DB::raw() to the connection method (an entry on the
-    # facade name never matches) and Invoice::whereRaw() to the Eloquent builder.
     disallowedStaticCalls:
         -
             method:
+                - '*::dd()'
+                - '*::dump()'
+                - '*::ddRawSql()'
+                - '*::dumpRawSql()'
+            message: 'debug output must not be committed'
+        -
+            method:
                 - 'Illuminate\Database\ConnectionInterface::raw()'
+                - 'Illuminate\Database\ConnectionInterface::select()'
+                - 'Illuminate\Database\ConnectionInterface::selectOne()'
+                - 'Illuminate\Database\ConnectionInterface::scalar()'
+                - 'Illuminate\Database\ConnectionInterface::cursor()'
+                - 'Illuminate\Database\ConnectionInterface::insert()'
+                - 'Illuminate\Database\ConnectionInterface::update()'
+                - 'Illuminate\Database\ConnectionInterface::delete()'
                 - 'Illuminate\Database\ConnectionInterface::statement()'
+                - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
                 - 'Illuminate\Database\ConnectionInterface::unprepared()'
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
-            message: 'raw SQL bypasses bindings; use the query builder'
+            message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
