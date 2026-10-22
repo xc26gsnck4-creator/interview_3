@@ -9,13 +9,14 @@ use Illuminate\Support\Str;
 use Modules\Notifications\Api\Data\NotifyData;
 use Modules\Notifications\Application\Facades\NotificationFacade;
 use Modules\Notifications\Infrastructure\Drivers\DriverInterface;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 final class NotificationFacadeTest extends TestCase
 {
     use WithFaker;
 
-    private DriverInterface $driver;
+    private DriverInterface&MockObject $driver;
 
     private NotificationFacade $notificationFacade;
 
@@ -29,7 +30,7 @@ final class NotificationFacadeTest extends TestCase
         );
     }
 
-    public function testDelivered(): void
+    public function test_delivered(): void
     {
         $data = new NotifyData(
             resourceId: Str::uuid(),
