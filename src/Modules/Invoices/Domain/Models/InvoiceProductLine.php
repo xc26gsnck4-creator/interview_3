@@ -60,15 +60,24 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Registers the amount invariant on both saving and updating: instance
-     * increment() and decrement() fire updating but not saving, and the
-     * in-memory value is already changed by then. Enforced on every Eloquent
-     * write; query-builder writes bypass model events by Eloquent design, and
-     * the schema is fixed by the task.
+     * Registers the line invariants on creating and updating, so each Eloquent
+     * write path (create, save, update, increment, decrement) validates exactly
+     * once; increment() and decrement() fire updating, and the in-memory value
+     * is already changed by then. A line must belong to an invoice, so it is
+     * created through Invoice::productLines(). Query-builder writes bypass model
+     * events by Eloquent design, and the schema is fixed by the task.
      */
     protected static function booted(): void
     {
-        self::saving(static fn (InvoiceProductLine $line) => self::assertValidAmounts($line));
+        self::creating(static function (InvoiceProductLine $line): void {
+            $invoiceId = $line->getAttributes()['invoice_id'] ?? null;
+
+            if ($invoiceId === null || $invoiceId === '') {
+                throw InvalidProductLine::withoutInvoice();
+            }
+
+            self::assertValidAmounts($line);
+        });
         self::updating(static fn (InvoiceProductLine $line) => self::assertValidAmounts($line));
     }
 

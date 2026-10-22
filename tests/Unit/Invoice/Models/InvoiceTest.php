@@ -94,4 +94,14 @@ final class InvoiceTest extends TestCase
 
         $this->assertThrows(fn () => $invoice->totalPrice(), InvoiceTotalOverflow::class);
     }
+
+    public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
+    {
+        $invoice = Invoice::factory()->create();
+        $this->assertCount(0, $invoice->productLines);
+
+        $invoice->productLines()->create(['name' => 'x', 'quantity' => 2, 'unit_price' => 100]);
+
+        $this->assertSame(200, $invoice->totalPrice());
+    }
 }

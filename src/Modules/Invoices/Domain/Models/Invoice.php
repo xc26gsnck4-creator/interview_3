@@ -49,6 +49,7 @@ final class Invoice extends Model
     }
 
     /**
+     * Computed from the stored lines so it is never stale (one query per call).
      * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
      * the sum across lines may not, so the addition is checked.
      */
@@ -56,7 +57,7 @@ final class Invoice extends Model
     {
         $total = 0;
 
-        foreach ($this->productLines as $line) {
+        foreach ($this->productLines()->get() as $line) {
             $lineTotal = $line->totalUnitPrice();
 
             if ($lineTotal > PHP_INT_MAX - $total) {

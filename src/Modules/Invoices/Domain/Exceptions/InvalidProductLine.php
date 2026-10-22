@@ -24,4 +24,9 @@ final class InvalidProductLine extends DomainException
     {
         return new self(sprintf('Product line %s must not exceed 2147483647, %d given.', $field, $value));
     }
+
+    public static function withoutInvoice(): self
+    {
+        return new self('A product line must belong to an invoice; create lines through Invoice::productLines().');
+    }
 }

@@ -129,4 +129,13 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
     }
+
+    public function test_line_cannot_be_created_without_an_invoice(): void
+    {
+        $this->assertThrows(
+            fn () => InvoiceProductLine::create(['name' => 'x', 'quantity' => 1, 'unit_price' => 1]),
+            InvalidProductLine::class,
+        );
+        $this->assertDatabaseCount('invoice_product_lines', 0);
+    }
 }

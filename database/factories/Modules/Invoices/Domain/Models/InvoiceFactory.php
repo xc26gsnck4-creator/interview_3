@@ -12,6 +12,10 @@ use Modules\Invoices\Domain\Models\Invoice;
  * The namespace mirrors the model's so Laravel's default factory resolution finds
  * it without the model referencing the factory.
  *
+ * sending() and sentToClient() are create()-only states: make() yields a draft,
+ * because the model's creating invariant forbids constructing a non-draft invoice,
+ * so the states apply their status in afterCreating.
+ *
  * @extends Factory<Invoice>
  */
 final class InvoiceFactory extends Factory
