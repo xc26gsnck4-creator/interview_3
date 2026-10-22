@@ -60,10 +60,24 @@ final class InvoiceProductLine extends Model
     }
 
     /**
+     * Line amounts are set, never incremented or decremented: the SQL arithmetic
+     * runs against the stored value and cannot be validated in memory. Covers
+     * increment, decrement and their quiet variants.
+     *
+     * @param  string  $column
+     * @param  float|int  $amount
+     * @param  array<string, mixed>  $extra
+     * @param  string  $method
+     */
+    protected function incrementOrDecrement($column, $amount, $extra, $method): never
+    {
+        throw InvalidProductLine::arithmeticNotAllowed((string) $column);
+    }
+
+    /**
      * Registers the line invariants on creating and updating, so each Eloquent
-     * write path (create, save, update, increment, decrement) validates exactly
-     * once; increment() and decrement() fire updating, and the in-memory value
-     * is already changed by then. A line must belong to an invoice, so it is
+     * write path (create, save, update) validates exactly once; increment and
+     * decrement are rejected outright. A line must belong to an invoice, so it is
      * created through Invoice::productLines(). Query-builder writes bypass model
      * events by Eloquent design, and the schema is fixed by the task.
      */

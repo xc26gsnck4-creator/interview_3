@@ -29,4 +29,9 @@ final class InvalidProductLine extends DomainException
     {
         return new self('A product line must belong to an invoice; create lines through Invoice::productLines().');
     }
+
+    public static function arithmeticNotAllowed(string $field): self
+    {
+        return new self(sprintf('Product line %s cannot be incremented or decremented; create a new line instead.', $field));
+    }
 }

@@ -122,12 +122,24 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
     }
 
-    public function test_rejects_decrement_below_one(): void
+    public function test_rejects_increment_and_decrement(): void
     {
-        $line = InvoiceProductLine::factory()->create(['quantity' => 1]);
+        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
 
         $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
-        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
+        $this->assertThrows(fn () => $line->increment('quantity'), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
+    }
+
+    public function test_two_loaded_copies_cannot_decrement_below_one(): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
+        $first = InvoiceProductLine::query()->findOrFail($line->id);
+        $second = InvoiceProductLine::query()->findOrFail($line->id);
+
+        $this->assertThrows(fn () => $first->decrement('quantity'), InvalidProductLine::class);
+        $this->assertThrows(fn () => $second->decrement('quantity'), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
     }
 
     public function test_line_cannot_be_created_without_an_invoice(): void
