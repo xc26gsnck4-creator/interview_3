@@ -2,13 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Database\Factories;
+namespace Database\Factories\Modules\Invoices\Domain\Models;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
+ * The namespace mirrors the model's so Laravel's default factory resolution finds
+ * it without the model referencing the factory.
+ *
  * @extends Factory<Invoice>
  */
 final class InvoiceFactory extends Factory
@@ -23,18 +26,21 @@ final class InvoiceFactory extends Factory
         return [
             'customer_name' => fake()->name(),
             'customer_email' => fake()->safeEmail(),
-            'status' => StatusEnum::Draft,
         ];
     }
 
     public function sending(): self
     {
-        return $this->afterCreating(static fn (Invoice $invoice): bool => self::forceStatus($invoice, StatusEnum::Sending));
+        return $this->afterCreating(static function (Invoice $invoice): void {
+            self::forceStatus($invoice, StatusEnum::Sending);
+        });
     }
 
     public function sentToClient(): self
     {
-        return $this->afterCreating(static fn (Invoice $invoice): bool => self::forceStatus($invoice, StatusEnum::SentToClient));
+        return $this->afterCreating(static function (Invoice $invoice): void {
+            self::forceStatus($invoice, StatusEnum::SentToClient);
+        });
     }
 
     public function withLines(int $count = 1): self
@@ -46,8 +52,8 @@ final class InvoiceFactory extends Factory
      * Explicit test-only bypass of the creation invariant: invoices are created
      * as draft and then moved to the requested status without model events.
      */
-    private static function forceStatus(Invoice $invoice, StatusEnum $status): bool
+    private static function forceStatus(Invoice $invoice, StatusEnum $status): void
     {
-        return $invoice->forceFill(['status' => $status])->saveQuietly();
+        $invoice->forceFill(['status' => $status])->saveQuietly();
     }
 }

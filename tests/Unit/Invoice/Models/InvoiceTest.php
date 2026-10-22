@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\Unit\Invoices\Models;
+namespace Tests\Unit\Invoice\Models;
 
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Tests\TestCase;
@@ -72,5 +73,25 @@ final class InvoiceTest extends TestCase
 
         $this->assertSame(StatusEnum::Sending, $invoice->fresh()?->status);
         $this->assertDatabaseCount('invoice_product_lines', 2);
+    }
+
+    public function test_new_invoice_cannot_be_saved_with_a_null_status(): void
+    {
+        $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
+        $invoice->setAttribute('status', null);
+
+        $this->assertThrows(fn () => $invoice->save(), InvoiceMustBeCreatedAsDraft::class);
+        $this->assertDatabaseCount('invoices', 0);
+    }
+
+    public function test_total_price_throws_when_the_sum_overflows(): void
+    {
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
+            'quantity' => InvoiceProductLine::MAX_VALUE,
+            'unit_price' => InvoiceProductLine::MAX_VALUE,
+        ]);
+
+        $this->assertThrows(fn () => $invoice->totalPrice(), InvoiceTotalOverflow::class);
     }
 }

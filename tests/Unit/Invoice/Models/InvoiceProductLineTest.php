@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\Unit\Invoices\Models;
+namespace Tests\Unit\Invoice\Models;
 
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
@@ -65,6 +65,8 @@ final class InvoiceProductLineTest extends TestCase
             'fractional quantity' => ['quantity', 1.5],
             'garbage quantity' => ['quantity', '2widgets'],
             'null unit price' => ['unit_price', null],
+            'boolean quantity' => ['quantity', true],
+            'float unit price' => ['unit_price', 1.0],
         ];
     }
 
@@ -118,5 +120,13 @@ final class InvoiceProductLineTest extends TestCase
 
         $this->assertThrows(fn () => $line->update(['quantity' => 0]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
+    }
+
+    public function test_rejects_decrement_below_one(): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => 1]);
+
+        $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
     }
 }

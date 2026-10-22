@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Domain\Models;
 
-use Database\Factories\InvoiceFactory;
+use Database\Factories\Modules\Invoices\Domain\Models\InvoiceFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 
 /**
  * @property string $id
@@ -27,7 +28,8 @@ final class Invoice extends Model
 
     /**
      * Status is deliberately not fillable: mass assignment can never set it,
-     * so a new invoice is always a draft. Only transitions change it.
+     * the creating hook pins draft, and the status transitions are the sanctioned
+     * way to change it.
      *
      * @var list<string>
      */
@@ -46,11 +48,25 @@ final class Invoice extends Model
         return $this->hasMany(InvoiceProductLine::class);
     }
 
+    /**
+     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
+     * the sum across lines may not, so the addition is checked.
+     */
     public function totalPrice(): int
     {
-        return $this->productLines->sum(
-            static fn (InvoiceProductLine $line): int => $line->totalUnitPrice(),
-        );
+        $total = 0;
+
+        foreach ($this->productLines as $line) {
+            $lineTotal = $line->totalUnitPrice();
+
+            if ($lineTotal > PHP_INT_MAX - $total) {
+                throw InvoiceTotalOverflow::forInvoice($this->id);
+            }
+
+            $total += $lineTotal;
+        }
+
+        return $total;
     }
 
     /**
@@ -73,10 +89,5 @@ final class Invoice extends Model
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
             }
         });
-    }
-
-    protected static function newFactory(): InvoiceFactory
-    {
-        return InvoiceFactory::new();
     }
 }

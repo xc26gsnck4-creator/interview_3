@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Domain\Models;
 
-use Database\Factories\InvoiceProductLineFactory;
+use Database\Factories\Modules\Invoices\Domain\Models\InvoiceProductLineFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -60,38 +60,47 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Enforces the line invariant on every Eloquent save (create and update):
-     * quantity and unit price must be integers between 1 and MAX_VALUE. The raw
-     * attribute is validated, not the cast value, so 1.5 or '2widgets' cannot be
-     * silently truncated. Query-builder writes bypass model events by Eloquent
-     * design, and the schema is fixed by the task.
+     * Registers the amount invariant on both saving and updating: instance
+     * increment() and decrement() fire updating but not saving, and the
+     * in-memory value is already changed by then. Enforced on every Eloquent
+     * write; query-builder writes bypass model events by Eloquent design, and
+     * the schema is fixed by the task.
      */
     protected static function booted(): void
     {
-        self::saving(static function (InvoiceProductLine $line): void {
-            foreach (['quantity', 'unit_price'] as $field) {
-                $raw = $line->getAttributes()[$field] ?? null;
-                $value = filter_var($raw, FILTER_VALIDATE_INT);
-
-                if ($value === false) {
-                    throw InvalidProductLine::notAnInteger($field, $raw);
-                }
-
-                if ($value < 1) {
-                    throw InvalidProductLine::nonPositive($field, $value);
-                }
-
-                if ($value > self::MAX_VALUE) {
-                    throw InvalidProductLine::tooLarge($field, $value);
-                }
-
-                $line->setAttribute($field, $value);
-            }
-        });
+        self::saving(static fn (InvoiceProductLine $line) => self::assertValidAmounts($line));
+        self::updating(static fn (InvoiceProductLine $line) => self::assertValidAmounts($line));
     }
 
-    protected static function newFactory(): InvoiceProductLineFactory
+    /**
+     * Quantity and unit price must be integers between 1 and MAX_VALUE. The raw
+     * attribute is validated, not the cast value, so 1.5 or '2widgets' cannot be
+     * silently truncated. Valid values are normalised to int.
+     */
+    private static function assertValidAmounts(self $line): void
     {
-        return InvoiceProductLineFactory::new();
+        foreach (['quantity', 'unit_price'] as $field) {
+            $raw = $line->getAttributes()[$field] ?? null;
+
+            if (! is_int($raw) && ! is_string($raw)) {
+                throw InvalidProductLine::notAnInteger($field, $raw);
+            }
+
+            $value = filter_var($raw, FILTER_VALIDATE_INT);
+
+            if ($value === false) {
+                throw InvalidProductLine::notAnInteger($field, $raw);
+            }
+
+            if ($value < 1) {
+                throw InvalidProductLine::nonPositive($field, $value);
+            }
+
+            if ($value > self::MAX_VALUE) {
+                throw InvalidProductLine::tooLarge($field, $value);
+            }
+
+            $line->setAttribute($field, $value);
+        }
     }
 }

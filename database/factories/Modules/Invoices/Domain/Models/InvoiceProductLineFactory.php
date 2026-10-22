@@ -2,13 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Database\Factories;
+namespace Database\Factories\Modules\Invoices\Domain\Models;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 
 /**
+ * The namespace mirrors the model's so Laravel's default factory resolution finds
+ * it without the model referencing the factory.
+ *
  * @extends Factory<InvoiceProductLine>
  */
 final class InvoiceProductLineFactory extends Factory

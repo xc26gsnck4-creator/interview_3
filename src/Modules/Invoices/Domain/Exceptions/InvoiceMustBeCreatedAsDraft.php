@@ -9,8 +9,8 @@ use Modules\Invoices\Domain\Enums\StatusEnum;
 
 final class InvoiceMustBeCreatedAsDraft extends DomainException
 {
-    public static function withStatus(StatusEnum $status): self
+    public static function withStatus(?StatusEnum $status): self
     {
-        return new self(sprintf('An invoice must be created as draft, %s given.', $status->value));
+        return new self(sprintf('An invoice must be created as draft, %s given.', $status === null ? 'none' : $status->value));
     }
 }
