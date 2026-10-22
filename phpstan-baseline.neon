@@ -1,6 +1,18 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Unused Modules\\Invoices\\Domain\\Enums\\StatusEnum\:\:Sending \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadEnumCase
+			count: 1
+			path: src/Modules/Invoices/Domain/Enums/StatusEnum.php
+
+		-
+			message: '#^Unused Modules\\Invoices\\Domain\\Enums\\StatusEnum\:\:SentToClient \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadEnumCase
+			count: 1
+			path: src/Modules/Invoices/Domain/Enums/StatusEnum.php
+
+		-
 			message: '#^Unused Modules\\Invoices\\Domain\\Models\\Invoice\:\:totalPrice \(all usages excluded by tests excluder\)$#'
 			identifier: shipmonk.deadMethod
 			count: 1

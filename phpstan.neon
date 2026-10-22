@@ -21,57 +21,68 @@ parameters:
     checkModelProperties: true
     parseModelCastsMethod: true
 
-    # Usages from tests do not count, so a member only tests call is reported.
-    # Members a later ticket will consume live in phpstan-baseline.neon and the
+    # Members a later ticket will consume live in phpstan-baseline.neon; the
     # ticket that consumes them removes their entry (unmatched entries fail).
     shipmonkDeadCode:
         usageExcluders:
             tests:
                 enabled: true
+                # Factories are test support like tests/ (the autoload-dev default).
+                devPaths:
+                    - %currentWorkingDirectory%/tests
+                    - %currentWorkingDirectory%/database/factories
+        usageProviders:
+            # Auto-enabled by transitive symfony/* and nette/utils packages.
+            symfony:
+                enabled: false
+            nette:
+                enabled: false
 
     ignoreErrors:
-        # Factory states exist for tests; being used only by tests is their job.
+        # Classes the container binds or autowires (scoped(Interface, Impl),
+        # constructor injection) have no `new` the detector can see.
         -
             identifier: shipmonk.deadMethod
-            message: '#^Unused Database\\Factories\\.+ \(all usages excluded by tests excluder\)$#'
-            paths:
-                - database/factories/*
-            reportUnmatched: false
-        # Services are built by the container, which the detector cannot see.
-        -
-            identifier: shipmonk.deadMethod
-            message: '#^Unused .+::__construct( \(all usages excluded by tests excluder\))?$#'
+            message: '#^Unused .+::__construct#'
             paths:
                 - src/Modules/*/Application/*
                 - src/Modules/*/Infrastructure/*
             reportUnmatched: false
 
+    # The bundled dangerous set already covers var_dump() and print_r().
     disallowedFunctionCalls:
         -
             function:
                 - 'dd()'
                 - 'dump()'
                 - 'ray()'
-                - 'var_dump()'
-                - 'print_r()'
             message: 'debug output must not be committed'
-
-    # Larastan resolves facade calls to the underlying class, so the Connection
-    # entries also catch DB::raw(), DB::statement() and DB::unprepared().
-    disallowedStaticCalls:
-        -
-            method:
-                - 'Illuminate\Database\Connection::raw()'
-                - 'Illuminate\Database\Connection::statement()'
-                - 'Illuminate\Database\Connection::unprepared()'
-            message: 'raw SQL bypasses bindings; use the query builder'
 
     disallowedMethodCalls:
         -
             method:
-                - 'Illuminate\Database\Connection::raw()'
-                - 'Illuminate\Database\Connection::statement()'
-                - 'Illuminate\Database\Connection::unprepared()'
+                - '*::dd()'
+                - '*::dump()'
+                - '*::ddRawSql()'
+                - '*::dumpRawSql()'
+            message: 'debug output must not be committed'
+        -
+            method:
+                - 'Illuminate\Database\ConnectionInterface::raw()'
+                - 'Illuminate\Database\ConnectionInterface::statement()'
+                - 'Illuminate\Database\ConnectionInterface::unprepared()'
+                - 'Illuminate\Database\Query\Builder::*Raw()'
+                - 'Illuminate\Database\Eloquent\Builder::*Raw()'
+            message: 'raw SQL bypasses bindings; use the query builder'
+
+    # Larastan resolves DB::raw() to the connection method (an entry on the
+    # facade name never matches) and Invoice::whereRaw() to the Eloquent builder.
+    disallowedStaticCalls:
+        -
+            method:
+                - 'Illuminate\Database\ConnectionInterface::raw()'
+                - 'Illuminate\Database\ConnectionInterface::statement()'
+                - 'Illuminate\Database\ConnectionInterface::unprepared()'
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
             message: 'raw SQL bypasses bindings; use the query builder'
