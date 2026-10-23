@@ -289,7 +289,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->save(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
+            sprintf('Invoice %s status cannot be set directly from draft to sent-to-client; use its transitions.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
@@ -302,7 +302,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->save(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sending to none.', $invoice->id),
+            sprintf('Invoice %s status cannot be set directly from sending to none; use its transitions.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
     }

@@ -94,8 +94,9 @@ final class Invoice extends Model
     }
 
     /**
-     * The send rule runs before the claim, so no caller can move a draft that
-     * cannot be sent.
+     * The send rule runs before the claim, so no caller can skip it. The claim
+     * itself guards only the status: lines are supplied at creation and nothing
+     * in the application writes them between the check and the claim.
      */
     public function markAsSending(): void
     {
@@ -133,7 +134,7 @@ final class Invoice extends Model
             if ($invoice->isDirty('status')) {
                 $stored = $invoice->newInstance()->setRawAttributes($invoice->getRawOriginal());
 
-                throw InvalidInvoiceStatusTransition::create($invoice->id, $stored->status, $invoice->status);
+                throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
             }
         });
     }
