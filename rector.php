@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\PHPUnit\CodeQuality\Rector\Class_\PreferPHPUnitSelfCallRector;
 use Rector\PHPUnit\CodeQuality\Rector\Class_\PreferPHPUnitThisCallRector;
 use RectorLaravel\Set\LaravelSetList;
 
@@ -10,7 +11,10 @@ use RectorLaravel\Set\LaravelSetList;
  * Left out on purpose: LARAVEL_STATIC_TO_INJECTION (injects constructors into
  * anonymous migrations and PHPUnit test cases), LARAVEL_LEGACY_FACTORIES_TO_CLASSES
  * (no legacy factories), and the naming and namedArgs prepared sets (rename
- * parameters of the provided Notifications API and name every boolean argument).
+ * `Blueprint $table` to `$blueprint` in the migrations and name every boolean
+ * argument in config). The PHPUnit narrow-asserts and mock-to-stub sets and the
+ * PHPUnit attributes set are already part of phpunitCodeQuality and the
+ * composer-based PHPUnit set.
  */
 return RectorConfig::configure()
     ->withPaths([
@@ -25,7 +29,6 @@ return RectorConfig::configure()
     ])
     ->withComposerBased(phpunit: true, laravel: true)
     ->withPhpSets()
-    ->withAttributesSets()
     ->withPreparedSets(
         deadCode: true,
         codeQuality: true,
@@ -36,8 +39,6 @@ return RectorConfig::configure()
         carbon: true,
         rectorPreset: true,
         phpunitCodeQuality: true,
-        phpunitNarrowAsserts: true,
-        phpunitMockToStub: true,
     )
     ->withSets([
         LaravelSetList::LARAVEL_ARRAYACCESS_TO_METHOD_CALL,
@@ -52,10 +53,11 @@ return RectorConfig::configure()
         LaravelSetList::LARAVEL_TESTING,
         LaravelSetList::LARAVEL_TYPE_DECLARATIONS,
     ])
+    // Tests call PHPUnit assertions statically (phpstan-strict-rules forbids dynamic calls to static methods).
+    ->withRules([PreferPHPUnitSelfCallRector::class])
     ->withSkip([
         // The Notifications module is provided by the task and stays unchanged.
         __DIR__.'/src/Modules/Notifications',
-        // Tests call PHPUnit assertions statically (phpstan-strict-rules forbids dynamic calls to static methods).
         PreferPHPUnitThisCallRector::class,
     ])
-    ->withImportNames(removeUnusedImports: true);
+    ->withImportNames();
