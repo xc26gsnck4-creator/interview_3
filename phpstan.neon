@@ -29,8 +29,8 @@ parameters:
                 enabled: true
                 # Factories are test support like tests/ (the autoload-dev default).
                 devPaths:
-                    - %currentWorkingDirectory%/tests
-                    - %currentWorkingDirectory%/database/factories
+                    - tests
+                    - database/factories
         usageProviders:
             # Auto-enabled by transitive symfony/* and nette/utils packages.
             symfony:
@@ -47,6 +47,14 @@ parameters:
             paths:
                 - src/Modules/*/Application/*
                 - src/Modules/*/Infrastructure/*
+            reportUnmatched: false
+        # Larastan models every Query\Builder method forwarded through an
+        # Eloquent builder or relation as static (EloquentBuilderMethodReflection),
+        # so strict-rules would flag $invoice->productLines()->count(). The rule
+        # stays on for everything else, PHPUnit assertions included.
+        -
+            identifier: staticMethod.dynamicCall
+            message: '#^Dynamic call to static method Illuminate\\Database\\Eloquent\\#'
             reportUnmatched: false
 
     # The bundled dangerous set already covers var_dump() and print_r().
