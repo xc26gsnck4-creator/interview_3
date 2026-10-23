@@ -12,8 +12,9 @@ use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
  * Ignored, each on the narrowest path: monolog/monolog and ext-pdo_mysql in the
  * framework's own config files (monolog arrives with laravel/framework, the
  * pdo_mysql constants sit behind extension_loaded()); symfony/http-foundation
- * and symfony/http-kernel in the Notifications module, which the task provides
- * and which stays unchanged; laravel/tinker, which only `artisan tinker` loads.
+ * and symfony/http-kernel in the Notifications module the task provides, because
+ * declaring them would pin Symfony versions that laravel/framework already
+ * manages; laravel/tinker, which only `artisan tinker` loads.
  */
 return (new Configuration)
     ->addPathsToScan([

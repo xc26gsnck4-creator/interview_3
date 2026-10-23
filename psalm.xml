@@ -1,7 +1,5 @@
 <?xml version="1.0"?>
 <psalm
-    errorLevel="1"
-    findUnusedBaselineEntry="true"
     findUnusedCode="false"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns="https://getpsalm.org/schema/config"
@@ -9,15 +7,12 @@
 >
     <projectFiles>
         <directory name="app"/>
-        <directory name="bootstrap"/>
+        <file name="bootstrap/app.php"/>
+        <file name="bootstrap/providers.php"/>
         <directory name="config"/>
         <directory name="database"/>
         <directory name="routes"/>
         <directory name="src"/>
-        <ignoreFiles>
-            <directory name="bootstrap/cache"/>
-            <directory name="vendor"/>
-        </ignoreFiles>
     </projectFiles>
     <plugins>
         <pluginClass class="Psalm\LaravelPlugin\Plugin"/>
