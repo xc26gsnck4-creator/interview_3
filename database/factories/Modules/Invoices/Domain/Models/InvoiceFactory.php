@@ -7,6 +7,7 @@ namespace Database\Factories\Modules\Invoices\Domain\Models;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
+use Override;
 
 /**
  * The namespace mirrors the model's so Laravel's default factory resolution finds
@@ -20,6 +21,7 @@ use Modules\Invoices\Domain\Models\Invoice;
  */
 final class InvoiceFactory extends Factory
 {
+    #[Override]
     protected $model = Invoice::class;
 
     /**
