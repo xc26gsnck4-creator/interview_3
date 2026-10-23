@@ -7,7 +7,9 @@ use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
 
 /**
  * Scans the composer autoload paths plus the PHP files the application loads
- * outside them: the set Rector covers and the HTTP entry point.
+ * outside them: the set Rector covers and the HTTP entry point. Unused packages
+ * are reported for require only (the tool's default): the dev tools run as
+ * binaries and analyser extensions, which no scanned file references.
  *
  * Ignored, each on the narrowest path: monolog/monolog and ext-pdo_mysql in the
  * framework's own config files (monolog arrives with laravel/framework, the

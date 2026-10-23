@@ -83,7 +83,7 @@
         "infection": "Mutation-tests the Invoices module; fails below 100% covered MSI (infection.json5).",
         "deps:validate": "Validates composer.json and the lock file, warnings included.",
         "deps:audit": "Checks the locked packages for security advisories and abandoned packages (ignores: config.policy).",
-        "deps:analyse": "Finds used but undeclared and declared but unused dependencies (composer-dependency-analyser.php).",
+        "deps:analyse": "Finds used but undeclared dependencies, and unused ones in require; dev tools run as binaries and extensions it cannot see (composer-dependency-analyser.php).",
         "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan."
     },
     "extra": {
