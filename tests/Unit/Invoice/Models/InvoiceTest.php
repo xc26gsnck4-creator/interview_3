@@ -159,4 +159,19 @@ final class InvoiceTest extends TestCase
 
         self::assertSame(200, $invoice->totalPrice());
     }
+
+    /**
+     * Generated ids are UUIDv7, so id order is creation order. The ids are
+     * forced here so that id order differs from the order of insertion.
+     */
+    public function test_product_lines_are_read_in_id_order(): void
+    {
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->for($invoice)->forEachSequence(
+            ['id' => '01900000-0000-7000-8000-000000000002', 'name' => 'second'],
+            ['id' => '01900000-0000-7000-8000-000000000001', 'name' => 'first'],
+        )->create();
+
+        self::assertSame(['first', 'second'], $invoice->productLines->pluck('name')->all());
+    }
 }

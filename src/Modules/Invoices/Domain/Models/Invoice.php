@@ -43,11 +43,15 @@ final class Invoice extends Model
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
+     * Ordered by id, which is creation order: HasUuids generates UUIDv7, time
+     * ordered and monotonic within one process. Without an ORDER BY the
+     * database may return the lines in any order.
+     *
      * @return HasMany<InvoiceProductLine, $this>
      */
     public function productLines(): HasMany
     {
-        return $this->hasMany(InvoiceProductLine::class);
+        return $this->hasMany(InvoiceProductLine::class)->orderBy('id');
     }
 
     /**
