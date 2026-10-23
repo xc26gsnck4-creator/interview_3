@@ -21,6 +21,8 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <server name="APP_NAME" value="Laravel" force="true"/>
+        <server name="APP_URL" value="http://localhost" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="DB_CONNECTION" value="sqlite" force="true"/>
         <env name="DB_DATABASE" value=":memory:" force="true"/>
