@@ -75,7 +75,7 @@
         "deps:validate": "@composer validate --strict",
         "deps:audit": "@composer audit --locked",
         "deps:analyse": "composer-dependency-analyser",
-        "taint": "psalm --taint-analysis --no-progress"
+        "taint": "psalm --no-progress"
     },
     "scripts-descriptions": {
         "phpstan": "Runs PHPStan from a cold tmpDir (phpstan.neon): under Docker Desktop its caches trust a stale directory stat and can skip new files.",
@@ -84,7 +84,7 @@
         "deps:validate": "Validates composer.json and the lock file, warnings included.",
         "deps:audit": "Checks the locked packages for security advisories and abandoned packages (ignores: config.policy).",
         "deps:analyse": "Finds used but undeclared and declared but unused dependencies (composer-dependency-analyser.php).",
-        "taint": "Runs Psalm's taint analysis only (psalm.xml); type checks stay with PHPStan."
+        "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan."
     },
     "extra": {
         "laravel": {

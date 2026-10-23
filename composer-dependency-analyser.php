@@ -7,14 +7,15 @@ use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
 
 /**
  * Scans the composer autoload paths plus the PHP files the application loads
- * outside them, the same set Rector covers.
+ * outside them: the set Rector covers and the HTTP entry point.
  *
  * Ignored, each on the narrowest path: monolog/monolog and ext-pdo_mysql in the
  * framework's own config files (monolog arrives with laravel/framework, the
  * pdo_mysql constants sit behind extension_loaded()); symfony/http-foundation
  * and symfony/http-kernel in the Notifications module the task provides, because
- * declaring them would pin Symfony versions that laravel/framework already
- * manages; laravel/tinker, which only `artisan tinker` loads.
+ * `validate --strict` rejects a `*` constraint, so declaring them would copy
+ * laravel/framework's Symfony range and have to follow it on every upgrade;
+ * laravel/tinker, which only `artisan tinker` loads.
  */
 return (new Configuration)
     ->addPathsToScan([
@@ -22,6 +23,7 @@ return (new Configuration)
         __DIR__.'/bootstrap/providers.php',
         __DIR__.'/config',
         __DIR__.'/database/migrations',
+        __DIR__.'/public/index.php',
         __DIR__.'/routes',
     ], isDev: false)
     ->ignoreErrorsOnPackageAndPath('monolog/monolog', __DIR__.'/config/logging.php', [ErrorType::SHADOW_DEPENDENCY])
