@@ -142,25 +142,32 @@ final class Invoice extends Model
      * The in-memory check gives a clear error before any write. The conditional
      * update is the atomic claim: of two instances holding the same status, only
      * one update matches the row, with no row lock (SQLite compiles lockForUpdate
-     * to nothing). It fires no model events, so syncing the original afterwards
-     * keeps a later save() on this instance from tripping the updating hook.
+     * to nothing). It runs on the base query with an explicit timestamp, so the
+     * instance gets exactly the updated_at the row got. It fires no model events,
+     * so syncing the original afterwards keeps a later save() on this instance
+     * from tripping the updating hook. A lost claim takes over only the stored
+     * status, leaving the instance's other attributes and relations alone.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
     {
         $this->ensureStatusIs($from, $to);
 
+        $now = $this->freshTimestamp();
         $claimed = self::query()
             ->whereKey($this->id)
             ->where('status', $from->value)
-            ->update(['status' => $to->value]);
+            ->toBase()
+            ->update(['status' => $to->value, 'updated_at' => $now]);
 
         if ($claimed === 0) {
-            $this->refresh();
+            $this->status = self::query()->whereKey($this->id)->firstOrFail(['status'])->status;
+            $this->syncOriginalAttribute('status');
 
             throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
         }
 
         $this->status = $to;
-        $this->syncOriginalAttribute('status');
+        $this->updated_at = $now;
+        $this->syncOriginalAttributes(['status', 'updated_at']);
     }
 }

@@ -108,6 +108,8 @@ final class InvoiceTransitionsTest extends TestCase
         self::assertSame(StatusEnum::Sending, $invoice->status);
         self::assertSame(StatusEnum::Sending, $stored->status);
         self::assertSame(now()->toDateTimeString(), $stored->updated_at?->toDateTimeString());
+        self::assertSame(now()->toDateTimeString(), $invoice->updated_at?->toDateTimeString());
+        self::assertFalse($invoice->isDirty());
     }
 
     #[DataProvider('statusesOtherThanDraft')]
@@ -134,6 +136,8 @@ final class InvoiceTransitionsTest extends TestCase
         self::assertSame(StatusEnum::SentToClient, $invoice->status);
         self::assertSame(StatusEnum::SentToClient, $stored->status);
         self::assertSame(now()->toDateTimeString(), $stored->updated_at?->toDateTimeString());
+        self::assertSame(now()->toDateTimeString(), $invoice->updated_at?->toDateTimeString());
+        self::assertFalse($invoice->isDirty());
     }
 
     /**
@@ -161,7 +165,7 @@ final class InvoiceTransitionsTest extends TestCase
     /**
      * Two instances of one draft stand in for two concurrent send requests: the
      * second still holds draft in memory, so only the conditional update can
-     * stop it. It reports the status it found and is refreshed to it.
+     * stop it. It reports the status it found and takes it over.
      */
     public function test_mark_as_sending_claims_the_row_only_once(): void
     {
@@ -193,6 +197,23 @@ final class InvoiceTransitionsTest extends TestCase
         );
         self::assertSame(StatusEnum::SentToClient, $second->status);
         self::assertSame(StatusEnum::SentToClient, $first->fresh()?->status);
+    }
+
+    /**
+     * A lost claim takes over only the status the row holds; the instance's
+     * other unsaved changes stay as they were.
+     */
+    public function test_lost_claim_updates_only_the_status_of_the_instance(): void
+    {
+        $first = Invoice::factory()->create();
+        $second = Invoice::query()->findOrFail($first->id);
+        $second->customer_name = 'Unsaved';
+
+        $first->markAsSending();
+
+        $this->assertThrows(fn () => $second->markAsSending(), InvalidInvoiceStatusTransition::class);
+        self::assertSame(StatusEnum::Sending, $second->status);
+        self::assertSame(['customer_name' => 'Unsaved'], $second->getDirty());
     }
 
     /**
