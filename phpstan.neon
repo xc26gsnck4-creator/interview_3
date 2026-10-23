@@ -72,7 +72,8 @@ parameters:
     # a model (Invoice::whereRaw(), Invoice::dd()) to the Eloquent builder and
     # DB facade calls to the connection; an entry on the facade name never
     # matches. One ConnectionInterface entry covers DB::select(), the facade's
-    # DB::connection() and an injected connection alike.
+    # DB::connection() and an injected connection alike; selectFromWriteConnection()
+    # and selectResultSets() exist only on the concrete Connection.
     disallowedMethodCalls:
         -
             method:
@@ -94,6 +95,8 @@ parameters:
                 - 'Illuminate\Database\ConnectionInterface::statement()'
                 - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
                 - 'Illuminate\Database\ConnectionInterface::unprepared()'
+                - 'Illuminate\Database\Connection::selectFromWriteConnection()'
+                - 'Illuminate\Database\Connection::selectResultSets()'
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
             message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
@@ -119,6 +122,8 @@ parameters:
                 - 'Illuminate\Database\ConnectionInterface::statement()'
                 - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
                 - 'Illuminate\Database\ConnectionInterface::unprepared()'
+                - 'Illuminate\Database\Connection::selectFromWriteConnection()'
+                - 'Illuminate\Database\Connection::selectResultSets()'
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
             message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
