@@ -1,0 +1,76 @@
+# Layer and module map. PHPat (tests/Architecture) owns the structural rules
+# and the Invoices domain's vendor whitelist; dependencies on vendor classes
+# are not checked here.
+#
+# The Notifications module is the task's own code: its Application,
+# Infrastructure and Presentation form one layer, so its existing
+# Application-to-Infrastructure import is not reported. It is mapped so
+# Invoices can reach it through Api alone, Api (the contract Invoices relies
+# on) stays free of the internals, and it cannot depend on Invoices.
+#
+# App (app/, empty today) is a layer with no allowed dependencies so that an
+# Invoices import of App\* is a violation rather than an uncovered dependency.
+deptrac:
+    paths:
+        - ./app
+        - ./src/Modules
+        - ./database/factories
+    layers:
+        -
+            name: App
+            collectors:
+                - type: directory
+                  value: app/.*
+        -
+            name: InvoicesDomain
+            collectors:
+                - type: directory
+                  value: src/Modules/Invoices/Domain/.*
+        -
+            name: InvoicesApplication
+            collectors:
+                - type: directory
+                  value: src/Modules/Invoices/Application/.*
+        -
+            name: InvoicesInfrastructure
+            collectors:
+                - type: directory
+                  value: src/Modules/Invoices/Infrastructure/.*
+        -
+            name: InvoicesPresentation
+            collectors:
+                - type: directory
+                  value: src/Modules/Invoices/Presentation/.*
+        -
+            name: Factories
+            collectors:
+                - type: directory
+                  value: database/factories/.*
+        -
+            name: NotificationsApi
+            collectors:
+                - type: directory
+                  value: src/Modules/Notifications/Api/.*
+        -
+            name: NotificationsInternals
+            collectors:
+                - type: directory
+                  value: src/Modules/Notifications/(Application|Infrastructure|Presentation)/.*
+    ruleset:
+        InvoicesDomain:
+            - Factories
+        InvoicesApplication:
+            - InvoicesDomain
+            - NotificationsApi
+        InvoicesInfrastructure:
+            - InvoicesApplication
+            - InvoicesDomain
+            - NotificationsApi
+        InvoicesPresentation:
+            - InvoicesApplication
+            - InvoicesDomain
+        Factories:
+            - InvoicesDomain
+        NotificationsApi: ~
+        NotificationsInternals:
+            - NotificationsApi
