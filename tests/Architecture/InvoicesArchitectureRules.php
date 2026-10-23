@@ -15,7 +15,7 @@ use PHPat\Test\PHPat;
  * layer and module map (deptrac.yaml). The Notifications module is the task's
  * own code and stays unchecked.
  */
-final class InvoicesArchitectureTest
+final class InvoicesArchitectureRules
 {
     public function test_invoices_classes_are_final(): BuildStep
     {
@@ -63,7 +63,6 @@ final class InvoicesArchitectureTest
             ->canOnly()->dependOn()->classes(
                 Selector::inNamespace('Modules\Invoices\Domain'),
                 Selector::inNamespace('Illuminate\Database\Eloquent'),
-                Selector::inNamespace('Ramsey\Uuid'),
                 Selector::inNamespace('Database\Factories'),
                 Selector::isStandardClass(),
             )

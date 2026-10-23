@@ -17,6 +17,9 @@ includes:
 
 parameters:
     level: max
+    # Fixed so `composer phpstan` can wipe exactly this directory before each
+    # run (see the script's description in composer.json).
+    tmpDir: /tmp/phpstan-interview-task
     paths:
         - app
         - src
@@ -168,6 +171,6 @@ services:
     # Architecture rules (phpat). The dead-code detector's phpat provider marks
     # their test_* methods as used.
     -
-        class: Tests\Architecture\InvoicesArchitectureTest
+        class: Tests\Architecture\InvoicesArchitectureRules
         tags:
             - phpat.test

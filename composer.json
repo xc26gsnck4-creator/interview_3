@@ -64,10 +64,14 @@
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail\" \"npm run dev\" --names=server,queue,logs,vite"
         ],
-        "phpstan": "rm -rf /tmp/phpstan && phpstan analyse --no-progress --memory-limit=1G"
+        "phpstan": "rm -rf /tmp/phpstan-interview-task && phpstan analyse --no-progress --memory-limit=1G",
+        "deptrac": "deptrac analyse --no-progress",
+        "infection": "infection --show-mutations --no-progress"
     },
     "scripts-descriptions": {
-        "phpstan": "Runs PHPStan from a cold tmpDir: under Docker Desktop its caches trust a stale directory stat and can skip new files."
+        "phpstan": "Runs PHPStan from a cold tmpDir (phpstan.neon): under Docker Desktop its caches trust a stale directory stat and can skip new files.",
+        "deptrac": "Checks the layer and module map in deptrac.yaml.",
+        "infection": "Mutation-tests the Invoices module; fails below 100% covered MSI (infection.json5)."
     },
     "extra": {
         "laravel": {

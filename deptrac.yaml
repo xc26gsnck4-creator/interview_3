@@ -4,13 +4,23 @@
 #
 # The Notifications module is the task's own code: its Application,
 # Infrastructure and Presentation form one layer, so its existing
-# Application-to-Infrastructure import is not reported. It is mapped only so
-# Invoices can reach it through Api alone and it cannot depend on Invoices.
+# Application-to-Infrastructure import is not reported. It is mapped so
+# Invoices can reach it through Api alone, Api (the contract Invoices relies
+# on) stays free of the internals, and it cannot depend on Invoices.
+#
+# App (app/, empty today) is a layer with no allowed dependencies so that an
+# Invoices import of App\* is a violation rather than an uncovered dependency.
 deptrac:
     paths:
+        - ./app
         - ./src/Modules
         - ./database/factories
     layers:
+        -
+            name: App
+            collectors:
+                - type: directory
+                  value: app/.*
         -
             name: InvoicesDomain
             collectors:
@@ -61,7 +71,6 @@ deptrac:
             - InvoicesDomain
         Factories:
             - InvoicesDomain
-        NotificationsApi:
-            - NotificationsInternals
+        NotificationsApi: ~
         NotificationsInternals:
             - NotificationsApi
