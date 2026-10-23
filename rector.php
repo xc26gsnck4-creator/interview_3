@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use Rector\CodingStyle\Rector\PostInc\PostIncDecToPreIncDecRector;
 use Rector\Config\RectorConfig;
 use Rector\PHPUnit\CodeQuality\Rector\Class_\PreferPHPUnitSelfCallRector;
 use Rector\PHPUnit\CodeQuality\Rector\Class_\PreferPHPUnitThisCallRector;
+use Rector\TypeDeclaration\Rector\StmtsAwareInterface\DeclareStrictTypesRector;
+use RectorLaravel\Rector\Class_\AddHasFactoryToModelsRector;
 use RectorLaravel\Set\LaravelSetList;
 
 /**
@@ -15,6 +18,17 @@ use RectorLaravel\Set\LaravelSetList;
  * argument in config). The PHPUnit narrow-asserts and mock-to-stub sets and the
  * PHPUnit attributes set are already part of phpunitCodeQuality and the
  * composer-based PHPUnit set.
+ *
+ * Tests call PHPUnit assertions statically (phpstan-strict-rules forbids dynamic
+ * calls to static methods), so PreferPHPUnitSelfCallRector is added and its
+ * opposite from phpunitCodeQuality is skipped.
+ *
+ * Skipped: the Notifications module, which the task provides and which stays
+ * unchanged; PostIncDecToPreIncDecRector (rectorPreset), whose `++$i` Pint's
+ * increment_style turns back into `$i++`; DeclareStrictTypesRector (rectorPreset),
+ * which adds strict types without the analysis SafeDeclareStrictTypesRector
+ * (codeQuality) does; AddHasFactoryToModelsRector (LARAVEL_FACTORIES), which adds
+ * HasFactory to every model, with or without a factory.
  */
 return RectorConfig::configure()
     ->withPaths([
@@ -53,11 +67,12 @@ return RectorConfig::configure()
         LaravelSetList::LARAVEL_TESTING,
         LaravelSetList::LARAVEL_TYPE_DECLARATIONS,
     ])
-    // Tests call PHPUnit assertions statically (phpstan-strict-rules forbids dynamic calls to static methods).
     ->withRules([PreferPHPUnitSelfCallRector::class])
     ->withSkip([
-        // The Notifications module is provided by the task and stays unchanged.
         __DIR__.'/src/Modules/Notifications',
         PreferPHPUnitThisCallRector::class,
+        PostIncDecToPreIncDecRector::class,
+        DeclareStrictTypesRector::class,
+        AddHasFactoryToModelsRector::class,
     ])
     ->withImportNames();
