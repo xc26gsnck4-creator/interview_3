@@ -50,11 +50,12 @@ parameters:
             reportUnmatched: false
         # Larastan models every Query\Builder method forwarded through an
         # Eloquent builder or relation as static (EloquentBuilderMethodReflection),
-        # so strict-rules would flag $invoice->productLines()->count(). The rule
-        # stays on for everything else, PHPUnit assertions included.
+        # so strict-rules would flag $invoice->productLines()->count(). The entry
+        # is tied to the builder class, so Model::query() called dynamically, own
+        # static methods and PHPUnit assertions are still reported.
         -
             identifier: staticMethod.dynamicCall
-            message: '#^Dynamic call to static method Illuminate\\Database\\Eloquent\\#'
+            message: '#^Dynamic call to static method Illuminate\\Database\\Eloquent\\Builder(<.*>)?::#'
             reportUnmatched: false
 
     # The bundled dangerous set already covers var_dump() and print_r().
