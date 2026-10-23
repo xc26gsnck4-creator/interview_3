@@ -35,6 +35,9 @@ final class InvoiceProductLine extends Model
      */
     public const int MAX_VALUE = 2_147_483_647;
 
+    /**
+     * @var list<'quantity'|'unit_price'>
+     */
     private const array AMOUNT_FIELDS = ['quantity', 'unit_price'];
 
     /**
