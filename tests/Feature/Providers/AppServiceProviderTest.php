@@ -6,7 +6,6 @@ namespace Tests\Feature\Providers;
 
 use App\Providers\AppServiceProvider;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -14,13 +13,12 @@ use Tests\TestCase;
 final class AppServiceProviderTest extends TestCase
 {
     /**
-     * The guards are static switches that outlive the application, so a test
-     * that boots the provider as production puts back the testing state.
+     * The guards are static switches that outlive the application, so the
+     * provider is booted as testing again to put back the state a test changed.
      */
     protected function tearDown(): void
     {
-        Model::shouldBeStrict();
-        DB::prohibitDestructiveCommands(false);
+        $this->bootProviderAs('testing');
         parent::tearDown();
     }
 
@@ -42,7 +40,7 @@ final class AppServiceProviderTest extends TestCase
 
     public function test_models_are_lenient_in_production(): void
     {
-        $this->bootAsProduction();
+        $this->bootProviderAs('production');
 
         self::assertFalse(Model::preventsLazyLoading());
         self::assertFalse(Model::preventsSilentlyDiscardingAttributes());
@@ -68,16 +66,16 @@ final class AppServiceProviderTest extends TestCase
     #[DataProvider('destructiveCommands')]
     public function test_destructive_commands_are_prohibited_in_production(string $command): void
     {
-        $this->bootAsProduction();
+        $this->bootProviderAs('production');
 
         $this->mockArtisan($command)
             ->expectsOutputToContain('This command is prohibited from running in this environment.')
             ->assertFailed();
     }
 
-    private function bootAsProduction(): void
+    private function bootProviderAs(string $environment): void
     {
-        $this->app->instance('env', 'production');
+        $this->app->instance('env', $environment);
         new AppServiceProvider($this->app)->boot();
     }
 }
