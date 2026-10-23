@@ -15,7 +15,7 @@ final class InvoiceTest extends TestCase
 {
     public function test_new_invoice_is_draft_even_when_status_is_passed(): void
     {
-        $invoice = Invoice::create([
+        $invoice = Invoice::query()->create([
             'customer_name' => 'Acme',
             'customer_email' => 'billing@acme.test',
             'status' => 'sending',

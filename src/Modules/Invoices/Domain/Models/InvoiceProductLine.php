@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Invoices\Domain\Models;
 
 use Database\Factories\Modules\Invoices\Domain\Models\InvoiceProductLineFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,12 +13,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
 
 /**
+ * `invoice_id` is deliberately not fillable: lines are created through
+ * Invoice::productLines().
+ *
  * @property string $id
  * @property string $invoice_id
  * @property string $name
  * @property int $quantity
  * @property int $unit_price
  */
+#[Fillable(['name', 'quantity', 'unit_price'])]
 final class InvoiceProductLine extends Model
 {
     /** @use HasFactory<InvoiceProductLineFactory> */
@@ -29,14 +34,6 @@ final class InvoiceProductLine extends Model
      * The `integer` column range; also keeps quantity * unit_price inside PHP's int.
      */
     public const int MAX_VALUE = 2_147_483_647;
-
-    /**
-     * `invoice_id` is deliberately not fillable: lines are created through
-     * Invoice::productLines().
-     *
-     * @var list<string>
-     */
-    protected $fillable = ['name', 'quantity', 'unit_price'];
 
     /**
      * @return BelongsTo<Invoice, $this>

@@ -10,6 +10,7 @@
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
+        "driftingly/rector-laravel": "^2.7",
         "fakerphp/faker": "^1.24",
         "larastan/larastan": "^3.13",
         "laravel/boost": "*",
@@ -21,6 +22,7 @@
         "phpstan/phpstan-deprecation-rules": "^2.0",
         "phpstan/phpstan-strict-rules": "^2.1",
         "phpunit/phpunit": "^11",
+        "rector/rector": "^2.7",
         "shipmonk/dead-code-detector": "^1.4",
         "spaze/phpstan-disallowed-calls": "^4.15"
     },

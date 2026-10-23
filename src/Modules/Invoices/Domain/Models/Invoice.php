@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Invoices\Domain\Models;
 
 use Database\Factories\Modules\Invoices\Domain\Models\InvoiceFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,13 +13,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
+use Override;
 
 /**
+ * Status is deliberately not fillable: mass assignment can never set it,
+ * the creating hook pins draft, and the status transitions are the sanctioned
+ * way to change it.
+ *
  * @property string $id
  * @property string $customer_name
  * @property string $customer_email
  * @property StatusEnum $status
  */
+#[Fillable(['customer_name', 'customer_email'])]
 final class Invoice extends Model
 {
     /** @use HasFactory<InvoiceFactory> */
@@ -27,17 +34,9 @@ final class Invoice extends Model
     use HasUuids;
 
     /**
-     * Status is deliberately not fillable: mass assignment can never set it,
-     * the creating hook pins draft, and the status transitions are the sanctioned
-     * way to change it.
-     *
-     * @var list<string>
-     */
-    protected $fillable = ['customer_name', 'customer_email'];
-
-    /**
      * @var array<string, mixed>
      */
+    #[Override]
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories\Modules\Invoices\Domain\Models;
 
+use Illuminate\Database\Eloquent\Factories\Attributes\UseModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
@@ -14,10 +15,9 @@ use Modules\Invoices\Domain\Models\InvoiceProductLine;
  *
  * @extends Factory<InvoiceProductLine>
  */
+#[UseModel(InvoiceProductLine::class)]
 final class InvoiceProductLineFactory extends Factory
 {
-    protected $model = InvoiceProductLine::class;
-
     /**
      * @return array<model-property<InvoiceProductLine>, mixed>
      */

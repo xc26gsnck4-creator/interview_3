@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Invoice\Models;
 
+use Iterator;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,16 +32,14 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return array<string, array{'quantity'|'unit_price', int}>
+     * @return Iterator<string, array{'quantity'|'unit_price', int}>
      */
-    public static function nonPositiveValues(): array
+    public static function nonPositiveValues(): Iterator
     {
-        return [
-            'quantity zero' => ['quantity', 0],
-            'quantity negative' => ['quantity', -1],
-            'unit price zero' => ['unit_price', 0],
-            'unit price negative' => ['unit_price', -1],
-        ];
+        yield 'quantity zero' => ['quantity', 0];
+        yield 'quantity negative' => ['quantity', -1];
+        yield 'unit price zero' => ['unit_price', 0];
+        yield 'unit price negative' => ['unit_price', -1];
     }
 
     /**
@@ -57,17 +56,15 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return array<string, array{'quantity'|'unit_price', mixed}>
+     * @return Iterator<string, array{'quantity'|'unit_price', mixed}>
      */
-    public static function nonIntegerValues(): array
+    public static function nonIntegerValues(): Iterator
     {
-        return [
-            'fractional quantity' => ['quantity', 1.5],
-            'garbage quantity' => ['quantity', '2widgets'],
-            'null unit price' => ['unit_price', null],
-            'boolean quantity' => ['quantity', true],
-            'float unit price' => ['unit_price', 1.0],
-        ];
+        yield 'fractional quantity' => ['quantity', 1.5];
+        yield 'garbage quantity' => ['quantity', '2widgets'];
+        yield 'null unit price' => ['unit_price', null];
+        yield 'boolean quantity' => ['quantity', true];
+        yield 'float unit price' => ['unit_price', 1.0];
     }
 
     /**
@@ -84,11 +81,12 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return array<string, array{'quantity'|'unit_price'}>
+     * @return Iterator<string, array{'quantity'|'unit_price'}>
      */
-    public static function bothFields(): array
+    public static function bothFields(): Iterator
     {
-        return ['quantity' => ['quantity'], 'unit price' => ['unit_price']];
+        yield 'quantity' => ['quantity'];
+        yield 'unit price' => ['unit_price'];
     }
 
     /**
@@ -147,7 +145,7 @@ final class InvoiceProductLineTest extends TestCase
     public function test_line_cannot_be_created_without_an_invoice(): void
     {
         $this->assertThrows(
-            fn () => InvoiceProductLine::create(['name' => 'x', 'quantity' => 1, 'unit_price' => 1]),
+            fn () => InvoiceProductLine::query()->create(['name' => 'x', 'quantity' => 1, 'unit_price' => 1]),
             InvalidProductLine::class,
         );
         $this->assertDatabaseCount('invoice_product_lines', 0);
