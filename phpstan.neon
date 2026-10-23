@@ -31,6 +31,12 @@ parameters:
                 devPaths:
                     - tests
                     - database/factories
+        # Collector data stays in the result cache. The offloaded .dat files in
+        # tmpDir are garbage-collected by any run that does not read them all (a
+        # single-file run from an IDE, a concurrent run), after which every cached
+        # run fails with "Internal error: DCD cache file not found".
+        cache:
+            offloadCollectorData: false
         usageProviders:
             # Auto-enabled by transitive symfony/* and nette/utils packages.
             symfony:
