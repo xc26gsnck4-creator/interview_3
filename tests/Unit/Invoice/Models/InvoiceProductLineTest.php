@@ -60,11 +60,11 @@ final class InvoiceProductLineTest extends TestCase
      */
     public static function nonIntegerValues(): Iterator
     {
-        yield 'fractional quantity' => ['quantity', 1.5, 'got 1.5.'];
-        yield 'garbage quantity' => ['quantity', '2widgets', "got '2widgets'."];
-        yield 'null unit price' => ['unit_price', null, 'got null.'];
-        yield 'boolean quantity' => ['quantity', true, 'got true.'];
-        yield 'float unit price' => ['unit_price', 1.0, 'got 1.0.'];
+        yield 'fractional quantity' => ['quantity', 1.5, '1.5'];
+        yield 'garbage quantity' => ['quantity', '2widgets', "'2widgets'"];
+        yield 'null unit price' => ['unit_price', null, 'null'];
+        yield 'boolean quantity' => ['quantity', true, 'true'];
+        yield 'float unit price' => ['unit_price', 1.0, '1.0'];
     }
 
     /**
@@ -76,7 +76,7 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
             InvalidProductLine::class,
-            sprintf('Product line %s must be a positive integer, %s', $field, $renderedValue),
+            sprintf('Product line %s must be a positive integer, got %s.', $field, $renderedValue),
         );
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }

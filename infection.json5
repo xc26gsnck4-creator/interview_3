@@ -10,9 +10,5 @@
     "threads": "max",
     // Covered MSI only, by user decision: a mutant on a line no test runs
     // does not count, so untested code passes this gate.
-    "minCoveredMsi": 100,
-    // Every ignore entry is a user decision with its reason next to it.
-    "mutators": {
-        "@default": true
-    }
+    "minCoveredMsi": 100
 }

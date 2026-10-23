@@ -108,18 +108,18 @@ final class InvoiceTest extends TestCase
     }
 
     /**
-     * Two maximal lines, one of 4 * MAX and one of 1 * 1 add up to exactly
-     * PHP_INT_MAX, which is still representable.
+     * With MAX = 2^31 - 1: MAX^2 + (MAX - 1)^2 + 6 * MAX = 2(MAX + 1)^2 - 1
+     * = 2^63 - 1 = PHP_INT_MAX, which is still representable.
      */
     public function test_total_price_accepts_a_sum_of_exactly_php_int_max(): void
     {
+        $max = InvoiceProductLine::MAX_VALUE;
         $invoice = Invoice::factory()->create();
-        InvoiceProductLine::factory()->count(2)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
-        ]);
-        InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 4, 'unit_price' => InvoiceProductLine::MAX_VALUE]);
-        InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 1, 'unit_price' => 1]);
+        InvoiceProductLine::factory()->for($invoice)->forEachSequence(
+            ['quantity' => $max, 'unit_price' => $max],
+            ['quantity' => $max - 1, 'unit_price' => $max - 1],
+            ['quantity' => 6, 'unit_price' => $max],
+        )->create();
 
         self::assertSame(PHP_INT_MAX, $invoice->totalPrice());
     }

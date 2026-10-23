@@ -21,7 +21,7 @@ final class InvoicesArchitectureTest
     {
         return PHPat::rule()
             ->classes(Selector::inNamespace('Modules\Invoices'))
-            ->excluding(Selector::isEnum(), Selector::isInterface())
+            ->excluding(Selector::isInterface())
             ->should()->beFinal()
             ->because('module classes are not extension points');
     }
@@ -51,10 +51,10 @@ final class InvoicesArchitectureTest
     }
 
     /**
-     * Factories come in through the `@use HasFactory<...>` PHPDoc. The last
-     * selector admits PHP's built-in classes (the global namespace): phpat's
-     * ignore_built_in_classes would also drop the relation the domain-exception
-     * rule checks.
+     * Factories come in through the `@use HasFactory<...>` PHPDoc. PHP's
+     * built-in classes are admitted here rather than through phpat's
+     * ignore_built_in_classes, which would also drop the relation the
+     * domain-exception rule checks.
      */
     public function test_domain_depends_only_on_whitelist(): BuildStep
     {
@@ -65,7 +65,7 @@ final class InvoicesArchitectureTest
                 Selector::inNamespace('Illuminate\Database\Eloquent'),
                 Selector::inNamespace('Ramsey\Uuid'),
                 Selector::inNamespace('Database\Factories'),
-                Selector::classname('/^[^\\\\]+$/', true),
+                Selector::isStandardClass(),
             )
             ->because('Eloquent models are the domain; the rest of Illuminate belongs to outer layers');
     }

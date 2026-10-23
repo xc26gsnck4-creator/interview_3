@@ -26,8 +26,8 @@ parameters:
     parseModelCastsMethod: true
 
     # Native types on every return, parameter, property and constant. The
-    # extension's `declare` key is a no-op in 2.5, so pint.json enforces
-    # declare(strict_types=1) instead.
+    # extension's `declare` key is a no-op in 2.5; declare(strict_types=1) is
+    # left to Rector's SafeDeclareStrictTypesRector.
     type_coverage:
         return: 100
         param: 100
@@ -35,11 +35,10 @@ parameters:
         constant: 100
 
     # Every Type Perfect rule that does something in 2.5: null_over_false is a
-    # no-op there, no_mixed is superseded by the two no_mixed_* keys, and
-    # narrow_param only checks private methods.
+    # no-op there, no_mixed turns on both no_mixed_* rules, and narrow_param
+    # only checks private methods.
     type_perfect:
-        no_mixed_property: true
-        no_mixed_caller: true
+        no_mixed: true
         narrow_param: true
         narrow_return: true
         no_param_type_removal: true
