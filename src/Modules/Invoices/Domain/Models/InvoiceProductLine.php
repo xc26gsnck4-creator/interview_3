@@ -62,28 +62,23 @@ final class InvoiceProductLine extends Model
     /**
      * Line amounts are set, never incremented or decremented: the SQL arithmetic
      * runs against the stored value and cannot be validated in memory. Covers
-     * increment, decrement and their quiet variants.
+     * increment, decrement and their quiet variants. The other parameters
+     * inherit the parent's PHPDoc; the parent documents $extra as a bare array.
      *
-     * @param  string  $column
-     * @param  float|int  $amount
-     * @param  array<string, mixed>  $extra
-     * @param  string  $method
+     * @param  array<mixed>  $extra
      */
     protected function incrementOrDecrement($column, $amount, $extra, $method): never
     {
-        throw InvalidProductLine::arithmeticNotAllowed((string) $column);
+        throw InvalidProductLine::arithmeticNotAllowed($column);
     }
 
     /**
      * Same rule as incrementOrDecrement(), for the incrementEach and
      * decrementEach variants.
-     *
-     * @param  array<string, float|int>  $columns
-     * @param  array<string, mixed>  $extra
      */
     protected function incrementOrDecrementEach(array $columns, array $extra, string $method): never
     {
-        throw InvalidProductLine::arithmeticNotAllowed((string) (array_key_first($columns) ?? 'quantity'));
+        throw InvalidProductLine::arithmeticNotAllowed(array_key_first($columns) ?? 'quantity');
     }
 
     /**
