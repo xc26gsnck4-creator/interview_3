@@ -3,6 +3,10 @@ includes:
     - vendor/nesbot/carbon/extension.neon
     - vendor/phpstan/phpstan-strict-rules/rules.neon
     - vendor/phpstan/phpstan-deprecation-rules/rules.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-phpunit/rules.neon
+    - vendor/tomasvotruba/type-coverage/config/extension.neon
+    - vendor/phpat/phpat/extension.neon
     - vendor/shipmonk/dead-code-detector/rules.neon
     - vendor/spaze/phpstan-disallowed-calls/extension.neon
     - vendor/spaze/phpstan-disallowed-calls/disallowed-dangerous-calls.neon
@@ -20,6 +24,33 @@ parameters:
         - tests
     checkModelProperties: true
     parseModelCastsMethod: true
+
+    # Native types on every return, parameter, property and constant. The
+    # extension's `declare` key is a no-op in 2.5, so pint.json enforces
+    # declare(strict_types=1) instead.
+    type_coverage:
+        return: 100
+        param: 100
+        property: 100
+        constant: 100
+
+    # Every Type Perfect rule that does something in 2.5: null_over_false is a
+    # no-op there, no_mixed is superseded by the two no_mixed_* keys, and
+    # narrow_param only checks private methods.
+    type_perfect:
+        no_mixed_property: true
+        no_mixed_caller: true
+        narrow_param: true
+        narrow_return: true
+        no_param_type_removal: true
+        no_isset_on_object: true
+        no_empty_on_object: true
+
+    # ignore_built_in_classes stays false (the default): true also drops the
+    # relation to a built-in parent such as DomainException, so a "should
+    # extend" rule fails on classes that do extend it.
+    phpat:
+        show_rule_names: true
 
     # Members a later ticket will consume live in phpstan-baseline.neon; the
     # ticket that consumes them removes their entry (unmatched entries fail).
@@ -133,3 +164,11 @@ parameters:
                 - 'Illuminate\Database\Query\Builder::*Raw()'
                 - 'Illuminate\Database\Eloquent\Builder::*Raw()'
             message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
+
+services:
+    # Architecture rules (phpat). The dead-code detector's phpat provider marks
+    # their test_* methods as used.
+    -
+        class: Tests\Architecture\InvoicesArchitectureTest
+        tags:
+            - phpat.test

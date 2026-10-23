@@ -1,0 +1,18 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    // The Invoices module only: Notifications is the task's own code and
+    // stays unchanged, so its surviving mutants could not be acted on.
+    "source": {
+        "directories": [
+            "src/Modules/Invoices"
+        ]
+    },
+    "threads": "max",
+    // Covered MSI only, by user decision: a mutant on a line no test runs
+    // does not count, so untested code passes this gate.
+    "minCoveredMsi": 100,
+    // Every ignore entry is a user decision with its reason next to it.
+    "mutators": {
+        "@default": true
+    }
+}

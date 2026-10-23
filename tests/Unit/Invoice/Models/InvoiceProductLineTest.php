@@ -56,26 +56,27 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', mixed}>
+     * @return Iterator<string, array{'quantity'|'unit_price', mixed, string}>
      */
     public static function nonIntegerValues(): Iterator
     {
-        yield 'fractional quantity' => ['quantity', 1.5];
-        yield 'garbage quantity' => ['quantity', '2widgets'];
-        yield 'null unit price' => ['unit_price', null];
-        yield 'boolean quantity' => ['quantity', true];
-        yield 'float unit price' => ['unit_price', 1.0];
+        yield 'fractional quantity' => ['quantity', 1.5, 'got 1.5.'];
+        yield 'garbage quantity' => ['quantity', '2widgets', "got '2widgets'."];
+        yield 'null unit price' => ['unit_price', null, 'got null.'];
+        yield 'boolean quantity' => ['quantity', true, 'got true.'];
+        yield 'float unit price' => ['unit_price', 1.0, 'got 1.0.'];
     }
 
     /**
      * @param  'quantity'|'unit_price'  $field
      */
     #[DataProvider('nonIntegerValues')]
-    public function test_rejects_non_integer_values(string $field, mixed $value): void
+    public function test_rejects_non_integer_values(string $field, mixed $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
             InvalidProductLine::class,
+            sprintf('Product line %s must be a positive integer, %s', $field, $renderedValue),
         );
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
@@ -106,10 +107,21 @@ final class InvoiceProductLineTest extends TestCase
     {
         $line = InvoiceProductLine::factory()->create(['quantity' => '3', 'unit_price' => '250']);
 
+        self::assertSame(3, $line->getAttributes()['quantity']);
+        self::assertSame(250, $line->getAttributes()['unit_price']);
+
         $fresh = InvoiceProductLine::query()->findOrFail($line->id);
         self::assertSame(3, $fresh->quantity);
         self::assertSame(250, $fresh->unit_price);
         self::assertSame(750, $fresh->totalUnitPrice());
+    }
+
+    public function test_unsaved_line_reads_numeric_strings_as_integers(): void
+    {
+        $line = new InvoiceProductLine(['quantity' => '3', 'unit_price' => '250']);
+
+        self::assertSame(3, $line->quantity);
+        self::assertSame(250, $line->unit_price);
     }
 
     public function test_rejects_non_positive_values_on_update(): void
@@ -129,6 +141,17 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertThrows(fn () => $line->incrementEach(['quantity' => 1]), InvalidProductLine::class);
         $this->assertThrows(fn () => $line->decrementEach(['quantity' => 1]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
+    }
+
+    public function test_rejected_arithmetic_names_the_first_column(): void
+    {
+        $line = InvoiceProductLine::factory()->create();
+
+        $this->assertThrows(
+            fn () => $line->incrementEach(['unit_price' => 1, 'quantity' => 1]),
+            InvalidProductLine::class,
+            'Product line unit_price cannot be incremented or decremented; create a new line instead.',
+        );
     }
 
     public function test_two_loaded_copies_cannot_decrement_below_one(): void
