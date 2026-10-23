@@ -23,7 +23,7 @@ final class OpenApiDocumentTest extends TestCase
         $this->useCommittedOpenApiDocument();
     }
 
-    public function test_committed_document_is_current_and_fully_typed(): void
+    public function test_committed_document_is_current_and_has_no_unknown_types(): void
     {
         $generatedPath = sys_get_temp_dir().'/api-'.Str::random(8).'.json';
 
@@ -31,7 +31,7 @@ final class OpenApiDocumentTest extends TestCase
             $this->runSuccessfully('scramble:export', ['--path' => $generatedPath, '--fail-on-unknown' => true]);
 
             self::assertNotEmpty(new AssertableJsonString(File::get($generatedPath))->json('paths'));
-            self::assertFileEquals(
+            self::assertJsonFileEqualsJsonFile(
                 base_path('api.json'),
                 $generatedPath,
                 'api.json is out of date: run `vendor/bin/sail composer api:export` and commit it.',
