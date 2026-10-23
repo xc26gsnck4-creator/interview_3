@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use Dedoc\Scramble\Scramble;
 use Illuminate\Testing\TestResponse;
 use Spectator\Spectator;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,19 +17,19 @@ use Symfony\Component\HttpFoundation\Response;
 trait ValidatesOpenApiContract
 {
     /**
-     * Scramble moves the single `api` route prefix into `servers`, so the paths
-     * in the document start after it and Spectator gets it back as a prefix.
+     * Scramble moves a single route prefix (`api`) out of the documented paths
+     * into `servers`, so Spectator gets the same prefix back.
      */
     protected function useCommittedOpenApiDocument(): void
     {
         config()->set('spectator.sources.local.base_path', base_path());
 
-        Spectator::using('api.json')->setPathPrefix('api');
+        Spectator::using('api.json')
+            ->setPathPrefix(Scramble::getGeneratorConfig(Scramble::DEFAULT_API)->apiPath()->serverPath());
     }
 
     /**
-     * The one place that calls Spectator's TestResponse macros: Larastan types
-     * them as static methods returning mixed (see phpstan.neon).
+     * The one place that calls Spectator's TestResponse macros (see phpstan.neon).
      *
      * @param  TestResponse<Response>  $response
      */

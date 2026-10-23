@@ -81,6 +81,7 @@
         "api:export": [
             "@putenv APP_NAME=Laravel",
             "@putenv APP_URL=http://localhost",
+            "@putenv API_VERSION=0.0.1",
             "@php artisan scramble:export"
         ]
     },
@@ -92,7 +93,7 @@
         "deps:audit": "Checks the locked packages for security advisories and abandoned packages (ignores: config.policy).",
         "deps:analyse": "Finds used but undeclared dependencies, and unused ones in require; dev tools run as binaries and extensions it cannot see (composer-dependency-analyser.php).",
         "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan.",
-        "api:export": "Regenerates api.json, the OpenAPI document, with Scramble; APP_NAME and APP_URL reach the document, so they are pinned here and in phpunit.xml."
+        "api:export": "Regenerates api.json, the OpenAPI document, with Scramble; APP_NAME, APP_URL and API_VERSION reach the document, so they are pinned here and in phpunit.xml."
     },
     "extra": {
         "laravel": {

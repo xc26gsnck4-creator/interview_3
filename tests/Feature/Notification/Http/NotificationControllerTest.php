@@ -43,7 +43,7 @@ final class NotificationControllerTest extends TestCase
             'reference' => $this->faker->uuid(),
         ]);
 
-        $this->assertMatchesContract($this->getJson($uri)->assertNotFound(), 404, validRequest: false);
+        $this->assertMatchesContract($this->getJson($uri)->assertNotFound(), 404);
     }
 
     public function test_invalid_reference_pattern_returns_not_found(): void

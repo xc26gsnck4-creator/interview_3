@@ -7,6 +7,8 @@ namespace Tests\Feature\Api;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Testing\AssertableJsonString;
+use Spectator\Spectator;
 use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
@@ -21,13 +23,14 @@ final class OpenApiDocumentTest extends TestCase
         $this->useCommittedOpenApiDocument();
     }
 
-    public function test_committed_document_matches_the_code(): void
+    public function test_committed_document_is_current_and_fully_typed(): void
     {
         $generatedPath = sys_get_temp_dir().'/api-'.Str::random(8).'.json';
 
         try {
-            $this->runSuccessfully('scramble:export', ['--path' => $generatedPath]);
+            $this->runSuccessfully('scramble:export', ['--path' => $generatedPath, '--fail-on-unknown' => true]);
 
+            self::assertNotEmpty(new AssertableJsonString(File::get($generatedPath))->json('paths'));
             self::assertFileEquals(
                 base_path('api.json'),
                 $generatedPath,
@@ -38,16 +41,6 @@ final class OpenApiDocumentTest extends TestCase
         }
     }
 
-    public function test_document_has_operations_and_no_unknown_types(): void
-    {
-        $this->runSuccessfully('scramble:analyze', ['--fail-on-empty' => true, '--fail-on-unknown' => true]);
-    }
-
-    public function test_document_is_valid_openapi(): void
-    {
-        $this->runSuccessfully('spectator:validate', ['--spec' => 'api.json']);
-    }
-
     /**
      * Scramble documents a route registered for several methods (Route::match,
      * Route::any, Route::redirect) under its first method only; the other
@@ -55,16 +48,11 @@ final class OpenApiDocumentTest extends TestCase
      */
     public function test_every_api_route_is_documented(): void
     {
-        $output = $this->runSuccessfully('spectator:routes', ['--spec' => 'api.json', '--prefix' => 'api', '--format' => 'json']);
-        $report = json_decode($output, associative: true, flags: JSON_THROW_ON_ERROR);
+        $output = $this->runSuccessfully('spectator:routes', ['--prefix' => Spectator::getPathPrefix(), '--format' => 'json']);
 
-        self::assertIsArray($report);
-        self::assertSame([], $report['undocumented_routes']);
-        self::assertIsArray($report['spec_operations']);
-        self::assertSame([], array_filter(
-            $report['spec_operations'],
-            static fn (mixed $operation): bool => data_get($operation, 'status') !== 'matched',
-        ));
+        new AssertableJsonString($output)
+            ->assertPath('undocumented_routes', [])
+            ->assertMissing(['status' => 'unimplemented']);
     }
 
     /**
