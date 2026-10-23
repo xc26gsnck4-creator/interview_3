@@ -1,0 +1,43 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Unused Modules\\Invoices\\Domain\\Enums\\StatusEnum\:\:Sending \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadEnumCase
+			count: 1
+			path: src/Modules/Invoices/Domain/Enums/StatusEnum.php
+
+		-
+			message: '#^Unused Modules\\Invoices\\Domain\\Enums\\StatusEnum\:\:SentToClient \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadEnumCase
+			count: 1
+			path: src/Modules/Invoices/Domain/Enums/StatusEnum.php
+
+		-
+			message: '#^Unused Modules\\Invoices\\Domain\\Models\\Invoice\:\:totalPrice \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadMethod
+			count: 1
+			path: src/Modules/Invoices/Domain/Models/Invoice.php
+
+		-
+			message: '#^Unused Modules\\Notifications\\Api\\Data\\NotifyData\:\:__construct \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadMethod
+			count: 1
+			path: src/Modules/Notifications/Api/Data/NotifyData.php
+
+		-
+			message: '#^Property Modules\\Notifications\\Api\\Events\\WebhookDeliveredEvent\:\:\$resourceId is never read$#'
+			identifier: shipmonk.deadProperty.neverRead
+			count: 1
+			path: src/Modules/Notifications/Api/Events/WebhookDeliveredEvent.php
+
+		-
+			message: '#^Unused Modules\\Notifications\\Api\\NotificationFacadeInterface\:\:notify$#'
+			identifier: shipmonk.deadMethod
+			count: 1
+			path: src/Modules/Notifications/Api/NotificationFacadeInterface.php
+
+		-
+			message: '#^Unused Modules\\Notifications\\Application\\Facades\\NotificationFacade\:\:notify \(all usages excluded by tests excluder\)$#'
+			identifier: shipmonk.deadMethod
+			count: 1
+			path: src/Modules/Notifications/Application/Facades/NotificationFacade.php

@@ -21,7 +21,7 @@ final class InvoiceTest extends TestCase
             'status' => 'sending',
         ]);
 
-        $this->assertSame(StatusEnum::Draft, $invoice->fresh()?->status);
+        self::assertSame(StatusEnum::Draft, $invoice->fresh()?->status);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
@@ -29,7 +29,7 @@ final class InvoiceTest extends TestCase
     {
         $invoice = Invoice::factory()->create();
 
-        $this->assertSame(0, $invoice->totalPrice());
+        self::assertSame(0, $invoice->totalPrice());
     }
 
     public function test_total_price_sums_line_totals(): void
@@ -38,7 +38,7 @@ final class InvoiceTest extends TestCase
         InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 2, 'unit_price' => 1500]);
         InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 3, 'unit_price' => 100]);
 
-        $this->assertSame(3300, $invoice->totalPrice());
+        self::assertSame(3300, $invoice->totalPrice());
     }
 
     public function test_factory_states_persist_their_status(): void
@@ -46,15 +46,15 @@ final class InvoiceTest extends TestCase
         $sending = Invoice::factory()->sending()->create();
         $sent = Invoice::factory()->sentToClient()->create();
 
-        $this->assertSame(StatusEnum::Sending, $sending->fresh()?->status);
-        $this->assertSame(StatusEnum::SentToClient, $sent->fresh()?->status);
+        self::assertSame(StatusEnum::Sending, $sending->fresh()?->status);
+        self::assertSame(StatusEnum::SentToClient, $sent->fresh()?->status);
     }
 
     public function test_with_lines_attaches_the_requested_number_of_lines(): void
     {
         $invoice = Invoice::factory()->withLines(3)->create();
 
-        $this->assertCount(3, $invoice->productLines);
+        self::assertCount(3, $invoice->productLines);
         $this->assertDatabaseCount('invoice_product_lines', 3);
     }
 
@@ -71,7 +71,7 @@ final class InvoiceTest extends TestCase
     {
         $invoice = Invoice::factory()->sending()->withLines(2)->create();
 
-        $this->assertSame(StatusEnum::Sending, $invoice->fresh()?->status);
+        self::assertSame(StatusEnum::Sending, $invoice->fresh()?->status);
         $this->assertDatabaseCount('invoice_product_lines', 2);
     }
 
@@ -98,10 +98,10 @@ final class InvoiceTest extends TestCase
     public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
     {
         $invoice = Invoice::factory()->create();
-        $this->assertCount(0, $invoice->productLines);
+        self::assertCount(0, $invoice->productLines);
 
         $invoice->productLines()->create(['name' => 'x', 'quantity' => 2, 'unit_price' => 100]);
 
-        $this->assertSame(200, $invoice->totalPrice());
+        self::assertSame(200, $invoice->totalPrice());
     }
 }

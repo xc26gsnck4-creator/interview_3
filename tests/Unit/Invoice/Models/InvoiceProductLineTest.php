@@ -15,7 +15,7 @@ final class InvoiceProductLineTest extends TestCase
     {
         $line = InvoiceProductLine::factory()->make(['quantity' => 3, 'unit_price' => 250]);
 
-        $this->assertSame(750, $line->totalUnitPrice());
+        self::assertSame(750, $line->totalUnitPrice());
     }
 
     public function test_minimum_line_is_accepted(): void
@@ -26,8 +26,8 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 1);
 
         $fresh = InvoiceProductLine::query()->findOrFail($line->id);
-        $this->assertSame(1, $fresh->quantity);
-        $this->assertSame(1, $fresh->unit_price);
+        self::assertSame(1, $fresh->quantity);
+        self::assertSame(1, $fresh->unit_price);
     }
 
     /**
@@ -109,9 +109,9 @@ final class InvoiceProductLineTest extends TestCase
         $line = InvoiceProductLine::factory()->create(['quantity' => '3', 'unit_price' => '250']);
 
         $fresh = InvoiceProductLine::query()->findOrFail($line->id);
-        $this->assertSame(3, $fresh->quantity);
-        $this->assertSame(250, $fresh->unit_price);
-        $this->assertSame(750, $fresh->totalUnitPrice());
+        self::assertSame(3, $fresh->quantity);
+        self::assertSame(250, $fresh->unit_price);
+        self::assertSame(750, $fresh->totalUnitPrice());
     }
 
     public function test_rejects_non_positive_values_on_update(): void
