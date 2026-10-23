@@ -11,14 +11,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
 
 /**
  * Status is deliberately not fillable: mass assignment can never set it,
- * the creating hook pins draft, and the status transitions are the sanctioned
- * way to change it.
+ * the creating hook pins draft, the updating hook rejects direct writes, and
+ * the status transitions are the sanctioned way to change it. Quiet saves and
+ * query-builder writes bypass model events, as Eloquent defines them.
  *
  * @property string $id
  * @property string $customer_name
@@ -70,6 +73,43 @@ final class Invoice extends Model
     }
 
     /**
+     * The send rule, also usable as a dry check. The status is checked first.
+     * The stored lines are checked again although model writes already
+     * guarantee them, so the rule reads completely here and also catches a row
+     * written past the model events.
+     */
+    public function ensureCanBeSent(): void
+    {
+        $this->ensureStatusIs(StatusEnum::Draft, StatusEnum::Sending);
+
+        $lines = $this->productLines()->get();
+
+        if ($lines->isEmpty()) {
+            throw InvoiceNotSendable::noProductLines($this->id);
+        }
+
+        if (! $lines->every(static fn (InvoiceProductLine $line): bool => $line->hasValidAmounts())) {
+            throw InvoiceNotSendable::invalidProductLine($this->id);
+        }
+    }
+
+    /**
+     * The send rule runs before the claim, so no caller can skip it. The claim
+     * itself guards only the status: lines are supplied at creation and nothing
+     * in the application writes them between the check and the claim.
+     */
+    public function markAsSending(): void
+    {
+        $this->ensureCanBeSent();
+        $this->transition(StatusEnum::Draft, StatusEnum::Sending);
+    }
+
+    public function markAsSentToClient(): void
+    {
+        $this->transition(StatusEnum::Sending, StatusEnum::SentToClient);
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -78,9 +118,10 @@ final class Invoice extends Model
     }
 
     /**
-     * Mass assignment cannot set status; this hook closes the direct-assignment
-     * path ($invoice->status = ...; $invoice->save()), so an invoice can only
-     * ever be created as draft.
+     * The creating hook closes the direct-assignment path on a new invoice
+     * ($invoice->status = ...; $invoice->save()), the updating hook on a stored
+     * one. getOriginal() is untyped, so the updating hook reads the stored
+     * status from a copy built from the original attributes.
      */
     protected static function booted(): void
     {
@@ -89,5 +130,56 @@ final class Invoice extends Model
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
             }
         });
+        self::updating(static function (Invoice $invoice): void {
+            if ($invoice->isDirty('status')) {
+                $stored = $invoice->newInstance()->setRawAttributes($invoice->getRawOriginal());
+
+                throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
+            }
+        });
+    }
+
+    private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void
+    {
+        if ($this->status !== $from) {
+            throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
+        }
+    }
+
+    /**
+     * The in-memory check gives a clear error before any write. The conditional
+     * update is the atomic claim: of two instances holding the same status, only
+     * one update matches the row, with no row lock (SQLite compiles lockForUpdate
+     * to nothing). It runs on the base query with an explicit timestamp, so the
+     * instance gets exactly the updated_at the row got. It fires no model events,
+     * so syncing the original afterwards keeps a later save() on this instance
+     * from tripping the updating hook. A lost claim takes over only the stored
+     * status, leaving the instance's other attributes and relations alone; that
+     * read takes a shared lock because a locking read is a current read, while a
+     * plain one inside the caller's transaction would return the snapshot under
+     * MySQL's REPEATABLE READ (SQLite compiles the lock to nothing). Both
+     * queries run on this instance's connection.
+     */
+    private function transition(StatusEnum $from, StatusEnum $to): void
+    {
+        $this->ensureStatusIs($from, $to);
+
+        $now = $this->freshTimestamp();
+        $claimed = $this->newQuery()
+            ->whereKey($this->id)
+            ->where('status', $from->value)
+            ->toBase()
+            ->update(['status' => $to->value, self::UPDATED_AT => $now]);
+
+        if ($claimed === 0) {
+            $this->status = $this->newQuery()->whereKey($this->id)->sharedLock()->firstOrFail(['status'])->status;
+            $this->syncOriginalAttribute('status');
+
+            throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
+        }
+
+        $this->status = $to;
+        $this->setUpdatedAt($now);
+        $this->syncOriginalAttributes(['status', self::UPDATED_AT]);
     }
 }
