@@ -7,7 +7,6 @@ namespace Tests\Feature\Providers;
 use App\Providers\AppServiceProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Testing\PendingCommand;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -38,7 +37,7 @@ final class AppServiceProviderTest extends TestCase
      */
     public function test_destructive_commands_are_allowed_outside_production(): void
     {
-        $this->pendingCommand('migrate:rollback --pretend')->assertSuccessful();
+        $this->mockArtisan('migrate:rollback', ['--pretend' => true])->assertSuccessful();
     }
 
     public function test_models_are_lenient_in_production(): void
@@ -71,7 +70,7 @@ final class AppServiceProviderTest extends TestCase
     {
         $this->bootAsProduction();
 
-        $this->pendingCommand($command)
+        $this->mockArtisan($command)
             ->expectsOutputToContain('This command is prohibited from running in this environment.')
             ->assertFailed();
     }
@@ -80,17 +79,5 @@ final class AppServiceProviderTest extends TestCase
     {
         $this->app->instance('env', 'production');
         new AppServiceProvider($this->app)->boot();
-    }
-
-    /**
-     * artisan() is typed PendingCommand|int; it returns the PendingCommand
-     * while console output is mocked, which is the default.
-     */
-    private function pendingCommand(string $command): PendingCommand
-    {
-        $pending = $this->artisan($command);
-        self::assertInstanceOf(PendingCommand::class, $pending);
-
-        return $pending;
     }
 }

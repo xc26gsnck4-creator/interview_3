@@ -9,18 +9,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Application-wide runtime guards. Outside production Eloquent throws on lazy
- * loading, on silently discarded mass-assigned attributes and on reading an
- * attribute that was not loaded, so those bugs surface in development and tests
- * while production stays lenient. In production the destructive database
- * commands (db:wipe, migrate:fresh, migrate:refresh, migrate:reset,
- * migrate:rollback) refuse to run.
+ * Runtime guards: Eloquent is strict outside production, so lazy loading,
+ * discarded mass assignment and unloaded attributes fail in development and
+ * tests while production stays lenient; destructive database commands are
+ * prohibited in production.
  */
 final class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $isProduction = app()->isProduction();
+        $isProduction = $this->app->environment('production');
 
         Model::shouldBeStrict(! $isProduction);
         DB::prohibitDestructiveCommands($isProduction);
