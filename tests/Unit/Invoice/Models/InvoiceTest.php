@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Invoice\Models;
 
+use Illuminate\Database\Eloquent\MassAssignmentException;
+use Illuminate\Database\Eloquent\Model;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
@@ -13,13 +15,37 @@ use Tests\TestCase;
 
 final class InvoiceTest extends TestCase
 {
+    public function test_status_passed_on_create_throws_while_models_are_strict(): void
+    {
+        $this->assertThrows(
+            fn () => Invoice::query()->create([
+                'customer_name' => 'Acme',
+                'customer_email' => 'billing@acme.test',
+                'status' => 'sending',
+            ]),
+            MassAssignmentException::class,
+            'Add fillable property [status] to allow mass assignment on ['.Invoice::class.'].',
+        );
+        $this->assertDatabaseCount('invoices', 0);
+    }
+
+    /**
+     * Production models are not strict (AppServiceProvider), so there the
+     * non-fillable status is discarded rather than rejected.
+     */
     public function test_new_invoice_is_draft_even_when_status_is_passed(): void
     {
-        $invoice = Invoice::query()->create([
-            'customer_name' => 'Acme',
-            'customer_email' => 'billing@acme.test',
-            'status' => 'sending',
-        ]);
+        Model::preventSilentlyDiscardingAttributes(false);
+
+        try {
+            $invoice = Invoice::query()->create([
+                'customer_name' => 'Acme',
+                'customer_email' => 'billing@acme.test',
+                'status' => 'sending',
+            ]);
+        } finally {
+            Model::preventSilentlyDiscardingAttributes();
+        }
 
         self::assertSame(StatusEnum::Draft, $invoice->fresh()?->status);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
