@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Unit\Invoice\Models;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Iterator;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
@@ -57,30 +56,20 @@ final class InvoiceTransitionsTest extends TestCase
     }
 
     /**
-     * The row is written through the query builder, past the line invariant,
-     * so the send rule is proven to hold on its own. The invalid line comes
-     * after a valid one, so every line is checked, not only the first.
+     * The row is created without model events, past the line invariant, so
+     * the send rule is proven to hold on its own. The invalid line comes after
+     * a valid one, so every line is checked, not only the first.
      */
     #[DataProvider('invalidPersistedValues')]
     public function test_ensure_can_be_sent_throws_not_sendable_when_a_persisted_line_is_invalid(string $field, float|int|string $value): void
     {
         $invoice = Invoice::factory()->withLines()->create();
-        DB::table('invoice_product_lines')->insert([
-            'id' => (string) Str::uuid(),
-            'invoice_id' => $invoice->id,
-            'name' => 'Out of band',
-            'quantity' => 1,
-            'unit_price' => 1,
-            $field => $value,
-        ]);
+        InvoiceProductLine::factory()->for($invoice)->createQuietly([$field => $value]);
 
         $this->assertThrows(
             fn () => $invoice->ensureCanBeSent(),
             InvoiceNotSendable::class,
-            sprintf(
-                'Invoice %s cannot be sent: every product line needs an integer quantity and unit price between 1 and 2147483647.',
-                $invoice->id,
-            ),
+            sprintf('Invoice %s cannot be sent: a product line has an invalid quantity or unit price.', $invoice->id),
         );
     }
 
@@ -176,7 +165,7 @@ final class InvoiceTransitionsTest extends TestCase
      */
     public function test_mark_as_sending_claims_the_row_only_once(): void
     {
-        $first = Invoice::factory()->withLines()->create();
+        $first = Invoice::factory()->create();
         $second = Invoice::query()->findOrFail($first->id);
 
         $first->markAsSending();

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\Invoices\Domain\Exceptions;
 
 use DomainException;
-use Modules\Invoices\Domain\Models\InvoiceProductLine;
 
 final class InvoiceNotSendable extends DomainException
 {
@@ -16,10 +15,6 @@ final class InvoiceNotSendable extends DomainException
 
     public static function invalidProductLine(string $invoiceId): self
     {
-        return new self(sprintf(
-            'Invoice %s cannot be sent: every product line needs an integer quantity and unit price between 1 and %d.',
-            $invoiceId,
-            InvoiceProductLine::MAX_VALUE,
-        ));
+        return new self(sprintf('Invoice %s cannot be sent: a product line has an invalid quantity or unit price.', $invoiceId));
     }
 }

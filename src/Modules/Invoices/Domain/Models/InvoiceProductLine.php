@@ -35,6 +35,8 @@ final class InvoiceProductLine extends Model
      */
     public const int MAX_VALUE = 2_147_483_647;
 
+    private const array AMOUNT_FIELDS = ['quantity', 'unit_price'];
+
     /**
      * @return BelongsTo<Invoice, $this>
      */
@@ -46,6 +48,20 @@ final class InvoiceProductLine extends Model
     public function totalUnitPrice(): int
     {
         return $this->quantity * $this->unit_price;
+    }
+
+    /**
+     * The amounts invariant as a check instead of a rejection, read from the raw
+     * attributes, so a row written past the model events (0, 1.5, 'abc', above
+     * MAX_VALUE) fails instead of being cast into range.
+     */
+    public function hasValidAmounts(): bool
+    {
+        return array_all(self::AMOUNT_FIELDS, function (string $field): bool {
+            $value = self::toInteger($this->getAttributes()[$field] ?? null);
+
+            return $value !== null && $value >= 1 && $value <= self::MAX_VALUE;
+        });
     }
 
     /**
@@ -106,16 +122,11 @@ final class InvoiceProductLine extends Model
      */
     private static function assertValidAmounts(self $line): void
     {
-        foreach (['quantity', 'unit_price'] as $field) {
+        foreach (self::AMOUNT_FIELDS as $field) {
             $raw = $line->getAttributes()[$field] ?? null;
+            $value = self::toInteger($raw);
 
-            if (! is_int($raw) && ! is_string($raw)) {
-                throw InvalidProductLine::notAnInteger($field, $raw);
-            }
-
-            $value = filter_var($raw, FILTER_VALIDATE_INT);
-
-            if ($value === false) {
+            if ($value === null) {
                 throw InvalidProductLine::notAnInteger($field, $raw);
             }
 
@@ -129,5 +140,20 @@ final class InvoiceProductLine extends Model
 
             $line->setAttribute($field, $value);
         }
+    }
+
+    /**
+     * The parse step both amount checks share: only an int or an integer string
+     * is an integer here, so 1.5, '2widgets', true and null are not.
+     */
+    private static function toInteger(mixed $raw): ?int
+    {
+        if (! is_int($raw) && ! is_string($raw)) {
+            return null;
+        }
+
+        $value = filter_var($raw, FILTER_VALIDATE_INT);
+
+        return $value === false ? null : $value;
     }
 }

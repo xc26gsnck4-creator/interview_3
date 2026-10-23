@@ -72,17 +72,13 @@ final class Invoice extends Model
     }
 
     /**
-     * The status is checked first, then every stored line against the line
-     * invariant. The lines are read raw, so a row written past the model events
-     * (0, 1.5, 'abc', above MAX_VALUE) is caught instead of being cast into
-     * range; model writes already guarantee it, but the send rule reads
-     * completely here.
+     * The status is checked first. The stored lines are checked again although
+     * model writes already guarantee them, so the send rule reads completely
+     * here and also catches a row written past the model events.
      */
     public function ensureCanBeSent(): void
     {
-        if ($this->status !== StatusEnum::Draft) {
-            throw InvalidInvoiceStatusTransition::create($this->id, $this->status, StatusEnum::Sending);
-        }
+        $this->ensureStatusIs(StatusEnum::Draft, StatusEnum::Sending);
 
         $lines = $this->productLines()->get();
 
@@ -90,7 +86,7 @@ final class Invoice extends Model
             throw InvoiceNotSendable::noProductLines($this->id);
         }
 
-        if ($lines->contains(static fn (InvoiceProductLine $line): bool => ! self::hasValidAmounts($line))) {
+        if (! $lines->every(static fn (InvoiceProductLine $line): bool => $line->hasValidAmounts())) {
             throw InvoiceNotSendable::invalidProductLine($this->id);
         }
     }
@@ -114,12 +110,10 @@ final class Invoice extends Model
     }
 
     /**
-     * Mass assignment cannot set status. The creating hook closes the
-     * direct-assignment path on a new invoice, so it is always created as draft;
-     * the updating hook closes it on a stored one ($invoice->status = ...;
-     * $invoice->save()), so only the transitions change it. getOriginal() is
-     * untyped, so the stored status is read from a copy hydrated from the
-     * original attributes.
+     * The creating hook closes the direct-assignment path on a new invoice
+     * ($invoice->status = ...; $invoice->save()), the updating hook on a stored
+     * one. getOriginal() is untyped, so the updating hook reads the stored
+     * status from a copy built from the original attributes.
      */
     protected static function booted(): void
     {
@@ -129,30 +123,31 @@ final class Invoice extends Model
             }
         });
         self::updating(static function (Invoice $invoice): void {
-            if (! $invoice->isDirty('status')) {
-                return;
+            if ($invoice->isDirty('status')) {
+                $stored = $invoice->newInstance()->setRawAttributes($invoice->getRawOriginal());
+
+                throw InvalidInvoiceStatusTransition::create($invoice->id, $stored->status, $invoice->status);
             }
-
-            $stored = $invoice->newFromBuilder($invoice->getRawOriginal());
-
-            throw InvalidInvoiceStatusTransition::create($invoice->id, $stored->status, $invoice->status);
         });
+    }
+
+    private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void
+    {
+        if ($this->status !== $from) {
+            throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
+        }
     }
 
     /**
      * The in-memory check gives a clear error before any write. The conditional
      * update is the atomic claim: of two instances holding the same status, only
-     * one update matches the row. That needs no row lock, which SQLite does not
-     * have (lockForUpdate compiles to nothing there). The Eloquent builder's
-     * update bumps updated_at and fires no model events, so the updating hook
-     * does not see it; syncing the original afterwards keeps a later save() on
-     * this instance from tripping that hook.
+     * one update matches the row, with no row lock (SQLite compiles lockForUpdate
+     * to nothing). It fires no model events, so syncing the original afterwards
+     * keeps a later save() on this instance from tripping the updating hook.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
     {
-        if ($this->status !== $from) {
-            throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
-        }
+        $this->ensureStatusIs($from, $to);
 
         $claimed = self::query()
             ->whereKey($this->id)
@@ -167,16 +162,5 @@ final class Invoice extends Model
 
         $this->status = $to;
         $this->syncOriginalAttribute('status');
-    }
-
-    /**
-     * The invariant InvoiceProductLine enforces on model writes: quantity and
-     * unit price are integers between 1 and MAX_VALUE.
-     */
-    private static function hasValidAmounts(InvoiceProductLine $line): bool
-    {
-        $range = ['options' => ['min_range' => 1, 'max_range' => InvoiceProductLine::MAX_VALUE]];
-
-        return array_all(['quantity', 'unit_price'], fn (string $field): bool => filter_var($line->getAttributes()[$field], FILTER_VALIDATE_INT, $range) !== false);
     }
 }
