@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Unused Modules\\Invoices\\Domain\\Models\\Invoice\:\:ensureCanBeSent \(all usages excluded by tests excluder\)$#'
-			identifier: shipmonk.deadMethod
-			count: 1
-			path: src/Modules/Invoices/Domain/Models/Invoice.php
-
-		-
 			message: '#^Unused Modules\\Invoices\\Domain\\Models\\Invoice\:\:markAsSending \(all usages excluded by tests excluder\)$#'
 			identifier: shipmonk.deadMethod
 			count: 1

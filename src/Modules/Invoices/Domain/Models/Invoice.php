@@ -73,9 +73,10 @@ final class Invoice extends Model
     }
 
     /**
-     * The status is checked first. The stored lines are checked again although
-     * model writes already guarantee them, so the send rule reads completely
-     * here and also catches a row written past the model events.
+     * The send rule, also usable as a dry check. The status is checked first.
+     * The stored lines are checked again although model writes already
+     * guarantee them, so the rule reads completely here and also catches a row
+     * written past the model events.
      */
     public function ensureCanBeSent(): void
     {
@@ -92,8 +93,13 @@ final class Invoice extends Model
         }
     }
 
+    /**
+     * The send rule runs before the claim, so no caller can move a draft that
+     * cannot be sent.
+     */
     public function markAsSending(): void
     {
+        $this->ensureCanBeSent();
         $this->transition(StatusEnum::Draft, StatusEnum::Sending);
     }
 
@@ -150,21 +156,22 @@ final class Invoice extends Model
      * status, leaving the instance's other attributes and relations alone; that
      * read takes a shared lock because a locking read is a current read, while a
      * plain one inside the caller's transaction would return the snapshot under
-     * MySQL's REPEATABLE READ (SQLite compiles the lock to nothing).
+     * MySQL's REPEATABLE READ (SQLite compiles the lock to nothing). Both
+     * queries run on this instance's connection.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
     {
         $this->ensureStatusIs($from, $to);
 
         $now = $this->freshTimestamp();
-        $claimed = self::query()
+        $claimed = $this->newQuery()
             ->whereKey($this->id)
             ->where('status', $from->value)
             ->toBase()
             ->update(['status' => $to->value, self::UPDATED_AT => $now]);
 
         if ($claimed === 0) {
-            $this->status = self::query()->whereKey($this->id)->sharedLock()->firstOrFail(['status'])->status;
+            $this->status = $this->newQuery()->whereKey($this->id)->sharedLock()->firstOrFail(['status'])->status;
             $this->syncOriginalAttribute('status');
 
             throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);

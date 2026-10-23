@@ -99,7 +99,7 @@ final class InvoiceTransitionsTest extends TestCase
 
     public function test_mark_as_sending_from_draft_persists_sending(): void
     {
-        $invoice = Invoice::factory()->create();
+        $invoice = Invoice::factory()->withLines()->create();
         $this->travel(1)->minute();
 
         $invoice->markAsSending();
@@ -123,6 +123,22 @@ final class InvoiceTransitionsTest extends TestCase
             sprintf('Invoice %s cannot move from %s to sending.', $invoice->id, $status->value),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
+    }
+
+    /**
+     * The send rule is part of the transition, so no caller can claim a draft
+     * that ensureCanBeSent() would reject.
+     */
+    public function test_mark_as_sending_rejects_a_draft_that_cannot_be_sent(): void
+    {
+        $invoice = Invoice::factory()->create();
+
+        $this->assertThrows(
+            fn () => $invoice->markAsSending(),
+            InvoiceNotSendable::class,
+            sprintf('Invoice %s cannot be sent without product lines.', $invoice->id),
+        );
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
     public function test_mark_as_sent_to_client_from_sending_persists(): void
@@ -169,7 +185,7 @@ final class InvoiceTransitionsTest extends TestCase
      */
     public function test_mark_as_sending_claims_the_row_only_once(): void
     {
-        $first = Invoice::factory()->create();
+        $first = Invoice::factory()->withLines()->create();
         $second = Invoice::query()->findOrFail($first->id);
 
         $first->markAsSending();
@@ -205,7 +221,7 @@ final class InvoiceTransitionsTest extends TestCase
      */
     public function test_lost_claim_updates_only_the_status_of_the_instance(): void
     {
-        $first = Invoice::factory()->create();
+        $first = Invoice::factory()->withLines()->create();
         $second = Invoice::query()->findOrFail($first->id);
         $second->customer_name = 'Unsaved';
 
@@ -223,7 +239,7 @@ final class InvoiceTransitionsTest extends TestCase
      */
     public function test_mark_as_sending_refuses_an_instance_left_stale_by_a_rolled_back_claim(): void
     {
-        $invoice = Invoice::factory()->create();
+        $invoice = Invoice::factory()->withLines()->create();
         $this->assertThrows(
             fn () => DB::transaction(static function () use ($invoice): never {
                 $invoice->markAsSending();
@@ -239,6 +255,30 @@ final class InvoiceTransitionsTest extends TestCase
             sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
+    }
+
+    /**
+     * The same in-memory check guards the delivery transition: a rolled-back
+     * claim leaves the instance at sent-to-client while the row is sending.
+     */
+    public function test_mark_as_sent_to_client_refuses_an_instance_left_stale_by_a_rolled_back_claim(): void
+    {
+        $invoice = Invoice::factory()->sending()->create();
+        $this->assertThrows(
+            fn () => DB::transaction(static function () use ($invoice): never {
+                $invoice->markAsSentToClient();
+
+                throw new RuntimeException('Delivery handling failed.');
+            }),
+            RuntimeException::class,
+        );
+
+        $this->assertThrows(
+            fn () => $invoice->markAsSentToClient(),
+            InvalidInvoiceStatusTransition::class,
+            sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $invoice->id),
+        );
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
     }
 
     public function test_status_cannot_be_changed_by_direct_assignment(): void
@@ -269,7 +309,7 @@ final class InvoiceTransitionsTest extends TestCase
 
     public function test_invoice_can_be_saved_after_a_transition(): void
     {
-        $invoice = Invoice::factory()->create();
+        $invoice = Invoice::factory()->withLines()->create();
         $invoice->markAsSending();
 
         $invoice->customer_name = 'Renamed';
