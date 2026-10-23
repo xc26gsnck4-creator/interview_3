@@ -12,9 +12,11 @@
         "ramsey/uuid": "^4.9"
     },
     "require-dev": {
+        "dedoc/scramble": "^0.13.49",
         "deptrac/deptrac": "^4.7",
         "driftingly/rector-laravel": "^2.7",
         "fakerphp/faker": "^1.24",
+        "hotmeteor/spectator": "^3.0",
         "infection/infection": "^0.35",
         "larastan/larastan": "^3.13",
         "laravel/boost": "*",
@@ -75,7 +77,14 @@
         "deps:validate": "@composer validate --strict",
         "deps:audit": "@composer audit --locked",
         "deps:analyse": "composer-dependency-analyser",
-        "taint": "psalm --no-progress"
+        "taint": "psalm --no-progress",
+        "api:export": [
+            "@php artisan config:clear",
+            "@putenv APP_NAME=Laravel",
+            "@putenv APP_URL=http://localhost",
+            "@putenv API_VERSION=0.0.1",
+            "@php artisan scramble:export --fail-on-unknown"
+        ]
     },
     "scripts-descriptions": {
         "phpstan": "Runs PHPStan from a cold tmpDir (phpstan.neon): under Docker Desktop its caches trust a stale directory stat and can skip new files.",
@@ -84,7 +93,8 @@
         "deps:validate": "Validates composer.json and the lock file, warnings included.",
         "deps:audit": "Checks the locked packages for security advisories and abandoned packages (ignores: config.policy).",
         "deps:analyse": "Finds used but undeclared dependencies, and unused ones in require; dev tools run as binaries and extensions it cannot see (composer-dependency-analyser.php).",
-        "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan."
+        "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan.",
+        "api:export": "Regenerates api.json, the OpenAPI document, with Scramble and fails on an unknown type. APP_NAME, APP_URL and API_VERSION reach the document, so the config cache is cleared and they are pinned here and in phpunit.xml."
     },
     "extra": {
         "laravel": {

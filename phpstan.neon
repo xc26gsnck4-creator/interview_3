@@ -96,6 +96,13 @@ parameters:
             identifier: staticMethod.dynamicCall
             message: '#^Dynamic call to static method Illuminate\\Database\\Eloquent\\Builder(<.*>)?::#'
             reportUnmatched: false
+        # Larastan models every closure macro as static (MacroMethodsClassReflectionExtension),
+        # Spectator's TestResponse assertions included. They are called in one
+        # helper only, so the entry is tied to that file and those two macros.
+        -
+            identifier: staticMethod.dynamicCall
+            message: '#^Dynamic call to static method Illuminate\\Testing\\TestResponse(<.*>)?::assertValid(Request|Response)\(\)\.$#'
+            path: tests/Concerns/ValidatesOpenApiContract.php
 
     # The bundled dangerous set already covers var_dump() and print_r().
     disallowedFunctionCalls:
