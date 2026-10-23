@@ -63,7 +63,11 @@ final class InvoiceTest extends TestCase
         $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
         $invoice->status = StatusEnum::Sending;
 
-        $this->assertThrows(fn () => $invoice->save(), InvoiceMustBeCreatedAsDraft::class);
+        $this->assertThrows(
+            fn () => $invoice->save(),
+            InvoiceMustBeCreatedAsDraft::class,
+            'An invoice must be created as draft, sending given.',
+        );
         $this->assertDatabaseCount('invoices', 0);
     }
 
@@ -80,7 +84,11 @@ final class InvoiceTest extends TestCase
         $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
         $invoice->setAttribute('status', null);
 
-        $this->assertThrows(fn () => $invoice->save(), InvoiceMustBeCreatedAsDraft::class);
+        $this->assertThrows(
+            fn () => $invoice->save(),
+            InvoiceMustBeCreatedAsDraft::class,
+            'An invoice must be created as draft, none given.',
+        );
         $this->assertDatabaseCount('invoices', 0);
     }
 
@@ -92,7 +100,28 @@ final class InvoiceTest extends TestCase
             'unit_price' => InvoiceProductLine::MAX_VALUE,
         ]);
 
-        $this->assertThrows(fn () => $invoice->totalPrice(), InvoiceTotalOverflow::class);
+        $this->assertThrows(
+            fn () => $invoice->totalPrice(),
+            InvoiceTotalOverflow::class,
+            sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
+        );
+    }
+
+    /**
+     * With MAX = 2^31 - 1: MAX^2 + (MAX - 1)^2 + 6 * MAX = 2(MAX + 1)^2 - 1
+     * = 2^63 - 1 = PHP_INT_MAX, which is still representable.
+     */
+    public function test_total_price_accepts_a_sum_of_exactly_php_int_max(): void
+    {
+        $max = InvoiceProductLine::MAX_VALUE;
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->for($invoice)->forEachSequence(
+            ['quantity' => $max, 'unit_price' => $max],
+            ['quantity' => $max - 1, 'unit_price' => $max - 1],
+            ['quantity' => 6, 'unit_price' => $max],
+        )->create();
+
+        self::assertSame(PHP_INT_MAX, $invoice->totalPrice());
     }
 
     public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
