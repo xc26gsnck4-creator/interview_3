@@ -31,7 +31,8 @@ final class InvoiceProductLine extends Model
     use HasUuids;
 
     /**
-     * Keeps quantity * unit_price inside PHP's int.
+     * A deliberate cap at 2^31 - 1, which keeps quantity * unit_price inside
+     * PHP's int (the overflow tests rely on this exact value).
      */
     public const int MAX_VALUE = 2_147_483_647;
 

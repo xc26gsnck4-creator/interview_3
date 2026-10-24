@@ -97,7 +97,7 @@ final class InvoiceProductLineTest extends TestCase
     public function test_rejects_values_above_max_value(string $field): void
     {
         $this->assertThrows(
-            fn () => InvoiceProductLine::factory()->create([$field => 2_147_483_648]),
+            fn () => InvoiceProductLine::factory()->create([$field => InvoiceProductLine::MAX_VALUE + 1]),
             InvalidProductLine::class,
         );
         $this->assertDatabaseCount('invoice_product_lines', 0);
