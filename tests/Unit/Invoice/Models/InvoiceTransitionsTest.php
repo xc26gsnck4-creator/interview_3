@@ -88,7 +88,7 @@ final class InvoiceTransitionsTest extends TestCase
     #[DataProvider('statusesOtherThanDraft')]
     public function test_ensure_can_be_sent_throws_transition_when_not_draft(StatusEnum $status): void
     {
-        $invoice = $this->invoiceIn($status);
+        $invoice = Invoice::factory()->inStatus($status)->create();
 
         $this->assertThrows(
             fn () => $invoice->ensureCanBeSent(),
@@ -115,7 +115,7 @@ final class InvoiceTransitionsTest extends TestCase
     #[DataProvider('statusesOtherThanDraft')]
     public function test_mark_as_sending_throws_when_not_draft(StatusEnum $status): void
     {
-        $invoice = $this->invoiceIn($status);
+        $invoice = Invoice::factory()->inStatus($status)->create();
 
         $this->assertThrows(
             fn () => $invoice->markAsSending(),
@@ -168,7 +168,7 @@ final class InvoiceTransitionsTest extends TestCase
     #[DataProvider('statusesOtherThanSending')]
     public function test_mark_as_sent_to_client_throws_when_not_sending(StatusEnum $status): void
     {
-        $invoice = $this->invoiceIn($status);
+        $invoice = Invoice::factory()->inStatus($status)->create();
 
         $this->assertThrows(
             fn () => $invoice->markAsSentToClient(),
@@ -316,16 +316,5 @@ final class InvoiceTransitionsTest extends TestCase
         $invoice->save();
 
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'customer_name' => 'Renamed', 'status' => 'sending']);
-    }
-
-    private function invoiceIn(StatusEnum $status): Invoice
-    {
-        $factory = Invoice::factory();
-
-        return match ($status) {
-            StatusEnum::Draft => $factory->create(),
-            StatusEnum::Sending => $factory->sending()->create(),
-            StatusEnum::SentToClient => $factory->sentToClient()->create(),
-        };
     }
 }

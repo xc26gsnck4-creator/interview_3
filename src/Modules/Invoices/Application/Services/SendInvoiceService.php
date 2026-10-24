@@ -14,12 +14,11 @@ use Throwable;
 
 /**
  * The claim comes before the notification, so of two concurrent sends only
- * one notifies. Both share one transaction, so the committed status is
- * sending only if the notification went out; any failure after the claim
+ * one notifies. Both share one transaction, so any failure after the claim
  * rolls it back and the invoice stays draft. SQLite holds its database-wide
- * write lock from the claim until the commit. One window stays open: a commit
- * that fails after the notification went out leaves the invoice in draft, and
- * a retry notifies the customer again.
+ * write lock from the claim until the commit. The lines are loaded after the
+ * commit, so once the notification went out only the commit can fail: that
+ * leaves the invoice in draft, and a retry notifies the customer again.
  */
 final readonly class SendInvoiceService
 {
@@ -47,7 +46,7 @@ final readonly class SendInvoiceService
                 throw NotificationFailed::forInvoice($invoice->id, $throwable);
             }
 
-            return $invoice->load('productLines');
-        });
+            return $invoice;
+        })->load('productLines');
     }
 }

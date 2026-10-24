@@ -97,8 +97,7 @@ final class SendInvoiceServiceTest extends TestCase
     #[DataProvider('statusesOtherThanDraft')]
     public function test_rejects_non_draft_and_does_not_notify(StatusEnum $status): void
     {
-        $factory = Invoice::factory()->withLines();
-        $invoice = $status === StatusEnum::Sending ? $factory->sending()->create() : $factory->sentToClient()->create();
+        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
 
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
