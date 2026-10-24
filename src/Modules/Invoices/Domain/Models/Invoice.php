@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
@@ -43,11 +44,26 @@ final class Invoice extends Model
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
+     * The lookup by id every use case shares: a missing invoice is reported as
+     * InvoiceNotFound rather than Eloquent's ModelNotFoundException. A uuid is
+     * case-insensitive on input, while ids are stored lowercase and SQLite
+     * compares them case-sensitively, so the id is lowercased first.
+     */
+    public static function findOrThrow(string $invoiceId): self
+    {
+        return self::query()->find(strtolower($invoiceId)) ?? throw InvoiceNotFound::withId($invoiceId);
+    }
+
+    /**
+     * Ordered by id, which is creation order: HasUuids generates UUIDv7, time
+     * ordered and monotonic within one process. Without an ORDER BY the
+     * database may return the lines in any order.
+     *
      * @return HasMany<InvoiceProductLine, $this>
      */
     public function productLines(): HasMany
     {
-        return $this->hasMany(InvoiceProductLine::class);
+        return $this->hasMany(InvoiceProductLine::class)->orderBy('id');
     }
 
     /**

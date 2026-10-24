@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Invoices\Application\Services;
+
+use Illuminate\Database\ConnectionInterface;
+use Modules\Invoices\Application\Data\CreateInvoiceData;
+use Modules\Invoices\Application\Data\ProductLineData;
+use Modules\Invoices\Domain\Models\Invoice;
+
+/**
+ * Customer name and email arrive validated from the HTTP edge; the domain
+ * owns the status and the line rules. A rejected line rolls back the whole
+ * invoice.
+ */
+final readonly class CreateInvoiceService
+{
+    public function __construct(
+        private ConnectionInterface $connection,
+    ) {}
+
+    public function handle(CreateInvoiceData $data): Invoice
+    {
+        return $this->connection->transaction(static function () use ($data): Invoice {
+            $invoice = Invoice::query()->create([
+                'customer_name' => $data->customerName,
+                'customer_email' => $data->customerEmail,
+            ]);
+
+            $invoice->productLines()->createMany(array_map(
+                static fn (ProductLineData $line): array => [
+                    'name' => $line->name,
+                    'quantity' => $line->quantity,
+                    'unit_price' => $line->unitPrice,
+                ],
+                $data->productLines,
+            ));
+
+            return $invoice->load('productLines');
+        });
+    }
+}
