@@ -170,10 +170,7 @@ final class Invoice extends Model
      * instance gets exactly the updated_at the row got. It fires no model events,
      * so syncing the original afterwards keeps a later save() on this instance
      * from tripping the updating hook. A lost claim takes over only the stored
-     * status, leaving the instance's other attributes and relations alone; that
-     * read takes a shared lock because a locking read is a current read, while a
-     * plain one inside the caller's transaction would return the snapshot under
-     * MySQL's REPEATABLE READ (SQLite compiles the lock to nothing). Both
+     * status, leaving the instance's other attributes and relations alone. Both
      * queries run on this instance's connection.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
@@ -188,7 +185,7 @@ final class Invoice extends Model
             ->update(['status' => $to->value, self::UPDATED_AT => $now]);
 
         if ($claimed === 0) {
-            $this->status = $this->newQuery()->whereKey($this->id)->sharedLock()->firstOrFail(['status'])->status;
+            $this->status = $this->newQuery()->whereKey($this->id)->firstOrFail(['status'])->status;
             $this->syncOriginalAttribute('status');
 
             throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);

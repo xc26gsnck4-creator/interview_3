@@ -31,7 +31,7 @@ final class InvoiceProductLine extends Model
     use HasUuids;
 
     /**
-     * The `integer` column range; also keeps quantity * unit_price inside PHP's int.
+     * Keeps quantity * unit_price inside PHP's int.
      */
     public const int MAX_VALUE = 2_147_483_647;
 

@@ -52,7 +52,7 @@ final class InvoiceTransitionsTest extends TestCase
         yield 'negative unit price' => ['unit_price', -1];
         yield 'fractional quantity' => ['quantity', 1.5];
         yield 'text unit price' => ['unit_price', 'abc'];
-        yield 'quantity above the column range' => ['quantity', InvoiceProductLine::MAX_VALUE + 1];
+        yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1];
     }
 
     /**
