@@ -14,11 +14,16 @@ use Throwable;
 
 /**
  * The claim comes before the notification, so of two concurrent sends only
- * one notifies. Both share one transaction, so any failure after the claim
- * rolls it back and the invoice stays draft. SQLite holds its database-wide
- * write lock from the claim until the commit. The lines are loaded after the
- * commit, so once the notification went out only the commit can fail: that
- * leaves the invoice in draft, and a retry notifies the customer again.
+ * one notifies; on SQLite the loser may fail at the claim with a
+ * database-locked error instead of a status error. Both share one
+ * transaction, so any failure after the claim rolls it back and the invoice
+ * stays draft. SQLite holds its database-wide write lock from the claim until
+ * the commit, and other connections see the invoice as draft until then, so a
+ * delivery report that arrives before the commit finds it in draft. The lines
+ * are loaded after the commit, so once the notification went out only the
+ * commit can fail: that leaves the invoice in draft, and a retry notifies the
+ * customer again. Callers must not wrap handle() in a transaction of their
+ * own, which would defer that commit.
  */
 final readonly class SendInvoiceService
 {
