@@ -11,9 +11,8 @@ use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
  * are reported for require only (the tool's default): the dev tools run as
  * binaries and analyser extensions, which no scanned file references.
  *
- * Ignored, each on the narrowest path: monolog/monolog and ext-pdo_mysql in the
- * framework's own config files (monolog arrives with laravel/framework, the
- * pdo_mysql constants sit behind extension_loaded()); symfony/http-foundation
+ * Ignored, each on the narrowest path: monolog/monolog in the framework's own
+ * config/logging.php (it arrives with laravel/framework); symfony/http-foundation
  * and symfony/http-kernel in the Notifications module the task provides, because
  * `validate --strict` rejects a `*` constraint, so declaring them would copy
  * laravel/framework's Symfony range and have to follow it on every upgrade;
@@ -29,7 +28,6 @@ return (new Configuration)
         __DIR__.'/routes',
     ], isDev: false)
     ->ignoreErrorsOnPackageAndPath('monolog/monolog', __DIR__.'/config/logging.php', [ErrorType::SHADOW_DEPENDENCY])
-    ->ignoreErrorsOnExtensionAndPath('ext-pdo_mysql', __DIR__.'/config/database.php', [ErrorType::SHADOW_DEPENDENCY])
     ->ignoreErrorsOnPackagesAndPaths(
         ['symfony/http-foundation', 'symfony/http-kernel'],
         [__DIR__.'/src/Modules/Notifications'],
