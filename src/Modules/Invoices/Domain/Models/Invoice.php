@@ -45,19 +45,13 @@ final class Invoice extends Model
 
     /**
      * The lookup by id every use case shares: a missing invoice is reported as
-     * InvoiceNotFound rather than Eloquent's ModelNotFoundException. A string
-     * that is not a uuid is not found without a query, because a native uuid
-     * column (pgsql) would reject it with a QueryException instead.
+     * InvoiceNotFound rather than Eloquent's ModelNotFoundException. A uuid is
+     * case-insensitive on input, while ids are stored lowercase and SQLite
+     * compares them case-sensitively, so the id is lowercased first.
      */
     public static function findOrThrow(string $invoiceId): self
     {
-        $query = self::query();
-
-        if (! $query->getModel()->isValidUniqueId($invoiceId)) {
-            throw InvoiceNotFound::withId($invoiceId);
-        }
-
-        return $query->find($invoiceId) ?? throw InvoiceNotFound::withId($invoiceId);
+        return self::query()->find(strtolower($invoiceId)) ?? throw InvoiceNotFound::withId($invoiceId);
     }
 
     /**

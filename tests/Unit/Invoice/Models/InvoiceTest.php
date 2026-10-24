@@ -182,10 +182,15 @@ final class InvoiceTest extends TestCase
         );
     }
 
-    public function test_find_or_throw_treats_a_malformed_id_as_not_found_without_a_query(): void
+    public function test_find_or_throw_accepts_the_id_in_uppercase(): void
     {
-        $this->expectsDatabaseQueryCount(0);
+        $invoice = Invoice::factory()->create();
 
+        self::assertSame($invoice->id, Invoice::findOrThrow(strtoupper($invoice->id))->id);
+    }
+
+    public function test_find_or_throw_treats_a_malformed_id_as_not_found(): void
+    {
         $this->assertThrows(
             fn (): Invoice => Invoice::findOrThrow('not-a-uuid'),
             InvoiceNotFound::class,
