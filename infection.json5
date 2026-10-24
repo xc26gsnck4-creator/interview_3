@@ -8,6 +8,20 @@
         ]
     },
     "threads": "max",
+    // Listing a mutator replaces the default set, so @default stays on.
+    "mutators": {
+        "@default": true,
+        // Equivalent at runtime: Model::__callStatic forwards a call to an
+        // inaccessible static method to (new static)->method() from Model's
+        // scope, where a protected method of the subclass is accessible.
+        // PHPStan reports the protected call (staticMethod.protected), so the
+        // visibility is guarded by the PHPStan gate instead (user decision).
+        "PublicVisibility": {
+            "ignore": [
+                "Modules\\Invoices\\Domain\\Models\\Invoice::findOrThrow"
+            ]
+        }
+    },
     // Covered MSI only, by user decision: a mutant on a line no test runs
     // does not count, so untested code passes this gate.
     "minCoveredMsi": 100

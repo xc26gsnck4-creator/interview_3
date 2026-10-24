@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
@@ -41,6 +42,15 @@ final class Invoice extends Model
      */
     #[Override]
     protected $attributes = ['status' => StatusEnum::Draft->value];
+
+    /**
+     * The lookup by id every use case shares, so a missing invoice always
+     * surfaces as InvoiceNotFound, never as Eloquent's ModelNotFoundException.
+     */
+    public static function findOrThrow(string $invoiceId): self
+    {
+        return self::query()->find($invoiceId) ?? throw InvoiceNotFound::withId($invoiceId);
+    }
 
     /**
      * Ordered by id, which is creation order: HasUuids generates UUIDv7, time

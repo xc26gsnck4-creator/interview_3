@@ -6,8 +6,10 @@ namespace Tests\Unit\Invoice\Models;
 
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
+use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
@@ -160,9 +162,28 @@ final class InvoiceTest extends TestCase
         self::assertSame(200, $invoice->totalPrice());
     }
 
+    public function test_find_or_throw_returns_the_invoice(): void
+    {
+        Invoice::factory()->create();
+        $invoice = Invoice::factory()->create();
+
+        self::assertSame($invoice->id, Invoice::findOrThrow($invoice->id)->id);
+    }
+
+    public function test_find_or_throw_throws_not_found_for_unknown_id(): void
+    {
+        Invoice::factory()->create();
+        $unknownId = (string) Str::uuid7();
+
+        $this->assertThrows(
+            fn (): Invoice => Invoice::findOrThrow($unknownId),
+            InvoiceNotFound::class,
+            sprintf('Invoice %s was not found.', $unknownId),
+        );
+    }
+
     /**
-     * Generated ids are UUIDv7, so id order is creation order. The ids are
-     * forced here so that id order differs from the order of insertion.
+     * The ids are forced so that id order differs from the order of insertion.
      */
     public function test_product_lines_are_read_in_id_order(): void
     {
