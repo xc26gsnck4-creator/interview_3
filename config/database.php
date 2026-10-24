@@ -24,7 +24,6 @@ return [
     |--------------------------------------------------------------------------
     |
     | Below are all of the database connections defined for your application.
-    | The application runs on SQLite only, so it is the one connection here.
     |
     */
 
