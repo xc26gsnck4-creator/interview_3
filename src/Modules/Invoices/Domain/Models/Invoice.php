@@ -44,12 +44,20 @@ final class Invoice extends Model
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
-     * The lookup by id every use case shares, so a missing invoice always
-     * surfaces as InvoiceNotFound, never as Eloquent's ModelNotFoundException.
+     * The lookup by id every use case shares: a missing invoice is reported as
+     * InvoiceNotFound rather than Eloquent's ModelNotFoundException. A string
+     * that is not a uuid is not found without a query, because a native uuid
+     * column (pgsql) would reject it with a QueryException instead.
      */
     public static function findOrThrow(string $invoiceId): self
     {
-        return self::query()->find($invoiceId) ?? throw InvoiceNotFound::withId($invoiceId);
+        $query = self::query();
+
+        if (! $query->getModel()->isValidUniqueId($invoiceId)) {
+            throw InvoiceNotFound::withId($invoiceId);
+        }
+
+        return $query->find($invoiceId) ?? throw InvoiceNotFound::withId($invoiceId);
     }
 
     /**

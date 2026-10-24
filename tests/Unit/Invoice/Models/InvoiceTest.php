@@ -182,6 +182,17 @@ final class InvoiceTest extends TestCase
         );
     }
 
+    public function test_find_or_throw_treats_a_malformed_id_as_not_found_without_a_query(): void
+    {
+        $this->expectsDatabaseQueryCount(0);
+
+        $this->assertThrows(
+            fn (): Invoice => Invoice::findOrThrow('not-a-uuid'),
+            InvoiceNotFound::class,
+            'Invoice not-a-uuid was not found.',
+        );
+    }
+
     /**
      * The ids are forced so that id order differs from the order of insertion.
      */
