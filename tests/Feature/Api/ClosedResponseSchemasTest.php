@@ -71,12 +71,14 @@ final class ClosedResponseSchemasTest extends TestCase
     {
         $document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
         $openObjects = [];
+        $unresolved = [];
         $visited = [];
 
         foreach ($this->responseRoots($document) as $path => $response) {
-            $this->walkSchema($document, $response, $path, $openObjects, $visited);
+            $this->walkSchema($document, $response, $path, $openObjects, $unresolved, $visited);
         }
 
+        self::assertSame([], $unresolved, 'These $ref values do not resolve inside api.json.');
         self::assertSame([], $openObjects, 'These response objects have properties but additionalProperties is not false.');
         self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $visited);
     }
@@ -111,9 +113,10 @@ final class ClosedResponseSchemasTest extends TestCase
      *
      * @param  array<array-key, mixed>  $document
      * @param  list<string>  $openObjects
+     * @param  list<string>  $unresolved
      * @param  array<string, true>  $visited
      */
-    private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$visited): void
+    private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$unresolved, array &$visited): void
     {
         $node = $this->asArray($node);
         $reference = $node['$ref'] ?? null;
@@ -121,7 +124,13 @@ final class ClosedResponseSchemasTest extends TestCase
         if (is_string($reference)) {
             if (! isset($visited[$reference])) {
                 $visited[$reference] = true;
-                $this->walkSchema($document, Arr::get($document, str_replace('/', '.', substr($reference, 2))), $reference, $openObjects, $visited);
+                $target = $this->resolvePointer($document, $reference);
+
+                if ($target === null) {
+                    $unresolved[] = $path.' -> '.$reference;
+                } else {
+                    $this->walkSchema($document, $target, $reference, $openObjects, $unresolved, $visited);
+                }
             }
 
             return;
@@ -132,24 +141,52 @@ final class ClosedResponseSchemasTest extends TestCase
         }
 
         foreach ($this->asArray($node['content'] ?? null) as $mediaType => $media) {
-            $this->walkSchema($document, $this->asArray($media)['schema'] ?? null, $path.' '.$mediaType, $openObjects, $visited);
+            $this->walkSchema($document, $this->asArray($media)['schema'] ?? null, $path.' '.$mediaType, $openObjects, $unresolved, $visited);
         }
 
         foreach ($this->asArray($node['properties'] ?? null) as $name => $property) {
-            $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $visited);
+            $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $unresolved, $visited);
         }
 
         foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
             foreach ($this->asArray($node[$keyword] ?? null) as $index => $branch) {
-                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $visited);
+                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $unresolved, $visited);
             }
         }
 
         foreach (['items' => '[]', 'additionalProperties' => '.*'] as $keyword => $suffix) {
             if (isset($node[$keyword])) {
-                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $visited);
+                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $unresolved, $visited);
             }
         }
+    }
+
+    /**
+     * Resolves a local `#/a/b` reference segment by segment (RFC 6901: `~1` is
+     * `/`, `~0` is `~`), so a component name with dots resolves too.
+     *
+     * @param  array<array-key, mixed>  $document
+     * @return array<array-key, mixed>|null
+     */
+    private function resolvePointer(array $document, string $reference): ?array
+    {
+        if (! str_starts_with($reference, '#/')) {
+            return null;
+        }
+
+        $target = $document;
+
+        foreach (explode('/', substr($reference, 2)) as $segment) {
+            $segment = str_replace(['~1', '~0'], ['/', '~'], $segment);
+
+            if (! is_array($target) || ! array_key_exists($segment, $target)) {
+                return null;
+            }
+
+            $target = $target[$segment];
+        }
+
+        return is_array($target) ? $target : null;
     }
 
     /**

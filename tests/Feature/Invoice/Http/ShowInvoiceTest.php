@@ -100,7 +100,8 @@ final class ShowInvoiceTest extends TestCase
     /**
      * No route matches, so there is no operation to check the response
      * against. Without an Accept header Laravel would answer an HTML page.
-     * With APP_DEBUG the body also carries the exception and its trace.
+     * phpunit.xml turns APP_DEBUG off, so the body has production's shape;
+     * with debug on it would also carry the exception and its trace.
      */
     public function test_returns_json_404_for_non_uuid_id_without_an_accept_header(): void
     {

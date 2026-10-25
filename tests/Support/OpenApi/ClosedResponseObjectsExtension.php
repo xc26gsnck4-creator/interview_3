@@ -22,7 +22,8 @@ use SplObjectStorage;
  * `additionalProperties: false`. Spectator has no strict mode and Scramble
  * never closes an object, so without this a response field that api.json does
  * not describe passes every contract check. An object that already has
- * `additionalProperties`, such as the 422 `errors` map, keeps it. Requests
+ * `additionalProperties`, such as the 422 `errors` map, keeps its schema, and
+ * objects inside that schema are closed. Requests
  * stay open: Laravel ignores unknown request keys. Tests run with
  * APP_DEBUG=false (phpunit.xml), so error bodies have production's shape and
  * fit the closed schemas.
@@ -74,6 +75,10 @@ final class ClosedResponseObjectsExtension extends OperationExtension
 
             foreach ($type->properties as $property) {
                 $this->closeType($property, $visited);
+            }
+
+            if ($type->additionalProperties instanceof Type && ! $type->additionalProperties instanceof NoAdditionalProperties) {
+                $this->closeType($type->additionalProperties, $visited);
             }
         }
     }
