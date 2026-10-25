@@ -73,16 +73,18 @@ final class InvoiceLifecycleTest extends TestCase
                 ->where('customer_name', 'Jane Doe')
                 ->where('customer_email', self::CUSTOMER_EMAIL)
                 ->has('product_lines', 2)
-                ->where('product_lines.0.name', 'Consulting')
-                ->where('product_lines.0.quantity', 2)
-                ->where('product_lines.0.unit_price', 15000)
-                ->where('product_lines.0.total_unit_price', 30000)
-                ->where('product_lines.1.name', 'Hosting')
-                ->where('product_lines.1.quantity', 3)
-                ->where('product_lines.1.unit_price', 100)
-                ->where('product_lines.1.total_unit_price', 300)
-                ->whereType('product_lines.0.id', 'string')
-                ->whereType('product_lines.1.id', 'string')
+                ->has('product_lines.0', static fn (AssertableJson $line): AssertableJson => $line
+                    ->whereType('id', 'string')
+                    ->where('name', 'Consulting')
+                    ->where('quantity', 2)
+                    ->where('unit_price', 15000)
+                    ->where('total_unit_price', 30000))
+                ->has('product_lines.1', static fn (AssertableJson $line): AssertableJson => $line
+                    ->whereType('id', 'string')
+                    ->where('name', 'Hosting')
+                    ->where('quantity', 3)
+                    ->where('unit_price', 100)
+                    ->where('total_unit_price', 300))
                 ->where('total_price', 30300)));
         $this->assertMatchesContract($response, 200);
 
