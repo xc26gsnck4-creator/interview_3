@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Invoice;
 
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Testing\Fakes\ExceptionHandlerFake;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Mockery\MockInterface;
 use Mockery\VerificationDirector;
+use Modules\Invoices\Application\Exceptions\NotificationFailed;
 use Modules\Notifications\Api\NotificationFacadeInterface;
 use RuntimeException;
 use Tests\Concerns\ValidatesOpenApiContract;
@@ -17,8 +20,10 @@ use Tests\TestCase;
 /**
  * The create, send, show and delivery-webhook endpoints used together through
  * the real routes, listener and event dispatch; only the notification facade is
- * a fake. The delivery reference comes from the notification the fake recorded,
- * and the status is read back through the show endpoint after every step.
+ * a fake. After a send, the delivery reference comes from the notification the
+ * fake recorded; the early delivery in the second test uses the invoice id, as
+ * no notification exists yet. The status is read back through the show endpoint
+ * after every step.
  */
 final class InvoiceLifecycleTest extends TestCase
 {
@@ -39,12 +44,15 @@ final class InvoiceLifecycleTest extends TestCase
 
     private MockInterface $log;
 
+    private ExceptionHandlerFake $exceptions;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->useCommittedOpenApiDocument();
         $this->log = Log::spy();
+        $this->exceptions = Exceptions::fake();
         $this->app->instance(NotificationFacadeInterface::class, $this->notifications = new FakeNotificationFacade);
     }
 
@@ -90,6 +98,7 @@ final class InvoiceLifecycleTest extends TestCase
 
         self::assertCount(1, $this->notifications->notified);
         $this->log->shouldNotHaveReceived('warning');
+        $this->exceptions->assertNothingReported();
     }
 
     public function test_delivery_before_send_does_not_advance_invoice(): void
@@ -103,15 +112,18 @@ final class InvoiceLifecycleTest extends TestCase
             'invoice_id' => $invoiceId,
             'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoiceId),
         ]]);
-        $warnings = $this->log->shouldHaveReceived('warning');
-        self::assertInstanceOf(VerificationDirector::class, $warnings);
-        $warnings->once();
 
         $this->sendInvoice($invoiceId);
         $this->assertStatus($invoiceId, 'sending');
 
-        $this->deliver($invoiceId);
+        self::assertCount(1, $this->notifications->notified);
+        $this->deliver($this->notifications->notified[0]->resourceId->toString());
         $this->assertStatus($invoiceId, 'sent-to-client');
+
+        $warnings = $this->log->shouldHaveReceived('warning');
+        self::assertInstanceOf(VerificationDirector::class, $warnings);
+        $warnings->once();
+        $this->exceptions->assertNothingReported();
     }
 
     public function test_failed_notification_can_be_retried_to_sent_to_client(): void
@@ -134,6 +146,8 @@ final class InvoiceLifecycleTest extends TestCase
         $this->assertStatus($invoiceId, 'sent-to-client');
 
         $this->log->shouldNotHaveReceived('warning');
+        $this->exceptions->assertReportedCount(1);
+        $this->exceptions->assertReported(NotificationFailed::class);
     }
 
     private function createInvoice(): string
