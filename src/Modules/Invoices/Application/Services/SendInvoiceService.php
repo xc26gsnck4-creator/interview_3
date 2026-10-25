@@ -23,9 +23,9 @@ use Throwable;
  * instances that both read draft, only one can claim the invoice. The claim
  * and the notification share one transaction, so any failure after the claim
  * rolls it back and the invoice stays draft. Other connections see the invoice
- * as draft until the commit, so a delivery report that reads it outside a
- * transaction before the commit finds it in draft; inside one it would wait at
- * BEGIN. Any throwable from notify() counts as not sent, so
+ * as draft until the commit; a delivery report that arrives before it waits
+ * for the commit (see MarkInvoiceDeliveredService). Any throwable from
+ * notify() counts as not sent, so
  * a provider that delivers and then throws is rolled back too. The lines are
  * loaded before the notification, so once notify() has returned only the
  * commit can undo the claim. Either way the invoice stays draft after the

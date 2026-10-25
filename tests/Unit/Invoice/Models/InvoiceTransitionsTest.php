@@ -181,9 +181,9 @@ final class InvoiceTransitionsTest extends TestCase
     /**
      * The second instance is stale: it still holds draft in memory after the
      * first claimed the row, so only the conditional update can stop it. In the
-     * application, IMMEDIATE transactions keep a concurrent send from reading a
-     * stale draft; this guard holds in any transaction mode. It reports the
-     * status it found and takes it over.
+     * application, IMMEDIATE transactions keep a concurrent send or delivery
+     * from reading a stale status; this guard, for both transitions, holds in
+     * any transaction mode. It reports the status it found and takes it over.
      */
     public function test_mark_as_sending_claims_the_row_only_once(): void
     {
