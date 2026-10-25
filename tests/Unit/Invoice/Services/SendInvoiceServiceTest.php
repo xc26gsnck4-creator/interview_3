@@ -175,16 +175,12 @@ final class SendInvoiceServiceTest extends TestCase
             throw $commitFailure;
         });
 
-        try {
-            new SendInvoiceService($connection, $this->notifications)->handle($invoice->id);
-            self::fail('Expected SendNotRecorded');
-        } catch (SendNotRecorded $sendNotRecorded) {
-            self::assertSame($commitFailure, $sendNotRecorded->getPrevious());
-            self::assertSame(
-                sprintf('Invoice %s was sent to the customer, but the send could not be recorded; it remains in draft, and sending it again notifies the customer again.', $invoice->id),
-                $sendNotRecorded->getMessage(),
-            );
-        }
+        $this->assertThrows(
+            fn (): Invoice => new SendInvoiceService($connection, $this->notifications)->handle($invoice->id),
+            fn (Throwable $throwable): bool => $throwable instanceof SendNotRecorded
+                && $throwable->getPrevious() === $commitFailure
+                && $throwable->getMessage() === sprintf('Invoice %s was sent to the customer, but the send could not be recorded; it remains in draft, and sending it again notifies the customer again.', $invoice->id),
+        );
 
         self::assertCount(1, $this->notifications->notified);
     }
@@ -196,12 +192,10 @@ final class SendInvoiceServiceTest extends TestCase
         $connection = $this->createMock(ConnectionInterface::class);
         $connection->method('transaction')->willThrowException($beginFailure);
 
-        try {
-            new SendInvoiceService($connection, $this->notifications)->handle($invoice->id);
-            self::fail('Expected the begin failure');
-        } catch (Throwable $throwable) {
-            self::assertSame($beginFailure, $throwable);
-        }
+        $this->assertThrows(
+            fn (): Invoice => new SendInvoiceService($connection, $this->notifications)->handle($invoice->id),
+            fn (Throwable $throwable): bool => $throwable === $beginFailure,
+        );
 
         self::assertSame([], $this->notifications->notified);
     }

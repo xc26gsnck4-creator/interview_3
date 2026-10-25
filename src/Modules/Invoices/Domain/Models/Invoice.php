@@ -6,6 +6,7 @@ namespace Modules\Invoices\Domain\Models;
 
 use Database\Factories\Modules\Invoices\Domain\Models\InvoiceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,24 +69,10 @@ final class Invoice extends Model
 
     /**
      * Computed from the stored lines so it is never stale (one query per call).
-     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
-     * the sum across lines may not, so the addition is checked.
      */
     public function totalPrice(): int
     {
-        $total = 0;
-
-        foreach ($this->productLines()->get() as $line) {
-            $lineTotal = $line->totalUnitPrice();
-
-            if ($lineTotal > PHP_INT_MAX - $total) {
-                throw InvoiceTotalOverflow::forInvoice($this->id);
-            }
-
-            $total += $lineTotal;
-        }
-
-        return $total;
+        return $this->sumLineTotals($this->productLines()->get());
     }
 
     /**
@@ -120,7 +107,7 @@ final class Invoice extends Model
         }
 
         try {
-            $this->ensureTotalFits();
+            $this->sumLineTotals($lines);
         } catch (InvoiceTotalOverflow) {
             throw InvoiceNotSendable::totalTooLarge($this->id);
         }
@@ -170,6 +157,29 @@ final class Invoice extends Model
                 throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
             }
         });
+    }
+
+    /**
+     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
+     * the sum across lines may not, so the addition is checked.
+     *
+     * @param  Collection<int, InvoiceProductLine>  $lines
+     */
+    private function sumLineTotals(Collection $lines): int
+    {
+        $total = 0;
+
+        foreach ($lines as $line) {
+            $lineTotal = $line->totalUnitPrice();
+
+            if ($lineTotal > PHP_INT_MAX - $total) {
+                throw InvoiceTotalOverflow::forInvoice($this->id);
+            }
+
+            $total += $lineTotal;
+        }
+
+        return $total;
     }
 
     private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void

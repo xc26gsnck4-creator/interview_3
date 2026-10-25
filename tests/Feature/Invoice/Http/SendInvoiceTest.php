@@ -11,7 +11,6 @@ use Iterator;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
-use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Modules\Notifications\Api\NotificationFacadeInterface;
@@ -104,7 +103,7 @@ final class SendInvoiceTest extends TestCase
         $response = $this->postJson(route('invoices.send', $invoice->id));
 
         $response->assertUnprocessable()
-            ->assertExactJson(['message' => InvoiceNotSendable::totalTooLarge($invoice->id)->getMessage()]);
+            ->assertExactJson(['message' => sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id)]);
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
         $this->assertMatchesContract($response, 422);

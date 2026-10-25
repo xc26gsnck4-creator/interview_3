@@ -26,18 +26,15 @@ use Throwable;
  * rolls it back and the invoice stays draft. Other connections see the invoice
  * as draft until the commit; a delivery report that arrives before it waits
  * for the commit (see MarkInvoiceDeliveredService). Any throwable from
- * notify() counts as not sent, so
- * a provider that delivers and then throws is rolled back too. The lines are
- * loaded before the notification, so once notify() has returned only the
- * commit can undo the claim. Either way the invoice stays draft after the
- * customer was notified, and a retry notifies them again. Callers must not
- * wrap handle() in a transaction of their own, which would defer that commit.
- * After notify() only the commit is left (the application registers no
- * afterCommit callbacks or committed listeners), so a failure then means the
- * customer was notified and the invoice stayed draft: it becomes
- * SendNotRecorded. A failure before it (a lock error at BEGIN, a rule,
- * NotificationFailed) passes through unchanged, so a lock 503 always means
- * nothing happened.
+ * notify() counts as not sent, so a provider that delivers and then throws is
+ * rolled back too. The lines are loaded before the notification, so once
+ * notify() has returned only the commit can undo the claim (the application
+ * registers no afterCommit callbacks or committed listeners). A failure then
+ * means the customer was notified and the invoice stayed draft, so a retry
+ * notifies them again: it becomes SendNotRecorded. A failure before it (a
+ * lock error at BEGIN, a rule, NotificationFailed) passes through unchanged,
+ * so a lock 503 always means nothing happened. Callers must not wrap handle()
+ * in a transaction of their own, which would defer that commit.
  * The total is in minor units and is shown with two decimals, computed on ints.
  */
 final readonly class SendInvoiceService
@@ -77,9 +74,7 @@ final readonly class SendInvoiceService
                 return $invoice;
             });
         } catch (Throwable $throwable) {
-            if ($notifiedInvoiceId === null) {
-                throw $throwable;
-            }
+            throw_if($notifiedInvoiceId === null, $throwable);
 
             throw SendNotRecorded::forInvoice($notifiedInvoiceId, $throwable);
         }
