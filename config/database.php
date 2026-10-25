@@ -25,6 +25,13 @@ return [
     |
     | Below are all of the database connections defined for your application.
     |
+    | SQLite transactions begin IMMEDIATE, taking the write lock at BEGIN. A
+    | DEFERRED transaction that reads before it writes fails at once with
+    | "database is locked" while another connection writes, because SQLite
+    | does not wait to upgrade a read lock. A writer waits for the lock up
+    | to busy_timeout milliseconds; without it PDO's driver default of 60
+    | seconds would apply.
+    |
     */
 
     'connections' => [
@@ -35,9 +42,10 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
+            'busy_timeout' => 5000,
             'journal_mode' => null,
             'synchronous' => null,
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
     ],
