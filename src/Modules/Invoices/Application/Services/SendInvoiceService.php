@@ -13,22 +13,24 @@ use Ramsey\Uuid\Uuid;
 use Throwable;
 
 /**
- * The claim comes before the notification, so of two concurrent sends only
- * one notifies. SQLite transactions begin IMMEDIATE (config/database.php), so
- * this one holds SQLite's database-wide write lock from BEGIN until the
- * commit. A concurrent send waits for that lock up to the busy timeout and
- * then finds the invoice no longer in draft, or fails with a database-locked
- * error at BEGIN, before it reads or notifies anything; any other writer waits
- * the same way. The claim and the notification share one transaction, so any
- * failure after the claim rolls it back and the invoice stays draft. Other
- * connections see the invoice as draft until the commit, so a delivery report
- * that arrives before the commit finds it in draft. Any throwable from notify() counts as not sent, so a provider
- * that delivers and then throws is rolled back too. The lines are loaded
- * before the notification, so once notify() has returned only the commit can
- * undo the claim. Either way the invoice stays draft after the customer was
- * notified, and a retry notifies them again. Callers must not wrap
- * handle() in a transaction of their own, which would defer that commit. The
- * total is in minor units and is shown with two decimals, computed on ints.
+ * SQLite transactions begin IMMEDIATE (config/database.php), so this one holds
+ * SQLite's database-wide write lock from BEGIN until the commit, and any other
+ * writer waits for it up to the busy timeout. A concurrent send therefore
+ * waits, then finds the invoice no longer in draft and is rejected by the
+ * status check, or fails with a database-locked error at BEGIN, before it
+ * reads or notifies anything. The claim, a conditional update before the
+ * notification, is the backstop that holds in any transaction mode: of two
+ * instances that both read draft, only one can claim the invoice. The claim
+ * and the notification share one transaction, so any failure after the claim
+ * rolls it back and the invoice stays draft. Other connections see the invoice
+ * as draft until the commit, so a delivery report that arrives before the
+ * commit finds it in draft. Any throwable from notify() counts as not sent, so
+ * a provider that delivers and then throws is rolled back too. The lines are
+ * loaded before the notification, so once notify() has returned only the
+ * commit can undo the claim. Either way the invoice stays draft after the
+ * customer was notified, and a retry notifies them again. Callers must not
+ * wrap handle() in a transaction of their own, which would defer that commit.
+ * The total is in minor units and is shown with two decimals, computed on ints.
  */
 final readonly class SendInvoiceService
 {

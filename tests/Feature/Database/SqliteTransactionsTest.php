@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Database;
 
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\SQLiteBuilder;
+use Illuminate\Support\Benchmark;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use LogicException;
 use PDOException;
 use Tests\TestCase;
 
@@ -29,6 +32,10 @@ final class SqliteTransactionsTest extends TestCase
 
     private string $databasePath;
 
+    private ConnectionInterface $holder;
+
+    private ConnectionInterface $waiter;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,9 +44,10 @@ final class SqliteTransactionsTest extends TestCase
         self::assertIsString($path);
         $this->databasePath = $path;
 
-        $sqlite = Config::array('database.connections.sqlite');
-        Config::set('database.connections.'.self::HOLDER, [...$sqlite, 'database' => $path]);
-        Config::set('database.connections.'.self::WAITER, [...$sqlite, 'database' => $path, 'busy_timeout' => self::WAITER_BUSY_TIMEOUT_MS]);
+        $holder = [...Config::array('database.connections.sqlite'), 'database' => $path];
+        $this->holder = DB::connectUsing(self::HOLDER, $holder);
+
+        $this->waiter = DB::connectUsing(self::WAITER, [...$holder, 'busy_timeout' => self::WAITER_BUSY_TIMEOUT_MS]);
     }
 
     /**
@@ -65,35 +73,25 @@ final class SqliteTransactionsTest extends TestCase
 
     /**
      * The holder writes inside an open transaction, as a send does while it
-     * notifies. The waiter's callback reads before it writes, as a send does;
-     * under DEFERRED it would run and its insert would fail without waiting.
+     * notifies, so its lock does not depend on the mode under test. Under
+     * DEFERRED the waiter's BEGIN would succeed and its callback would throw.
      */
     public function test_transaction_fails_at_begin_before_its_callback_runs_while_another_connection_writes(): void
     {
         Schema::connection(self::HOLDER)->create('locks', static function (Blueprint $table): void {
             $table->id();
         });
-        $holder = DB::connection(self::HOLDER);
-        $holder->beginTransaction();
-        $holder->table('locks')->insert(['id' => 1]);
-        $waiter = DB::connection(self::WAITER);
-        $callbackRan = false;
-        $callback = static function () use ($waiter, &$callbackRan): void {
-            $callbackRan = true;
-            $waiter->table('locks')->first();
-            $waiter->table('locks')->insert(['id' => 2]);
-        };
-        $startedAt = microtime(true);
+        $this->holder->beginTransaction();
+        $this->holder->table('locks')->insert(['id' => 1]);
 
-        $this->assertThrows(
-            static function () use ($waiter, $callback): void {
-                $waiter->transaction($callback);
-            },
+        [, $elapsedMs] = Benchmark::value(fn () => $this->assertThrows(
+            fn () => $this->waiter->transaction(static function (): never {
+                throw new LogicException('The callback ran.');
+            }),
             PDOException::class,
             'database is locked',
-        );
+        ));
 
-        self::assertFalse($callbackRan);
-        self::assertGreaterThanOrEqual(self::WAITER_BUSY_TIMEOUT_MS, (microtime(true) - $startedAt) * 1000);
+        self::assertGreaterThanOrEqual(self::WAITER_BUSY_TIMEOUT_MS, $elapsedMs);
     }
 }
