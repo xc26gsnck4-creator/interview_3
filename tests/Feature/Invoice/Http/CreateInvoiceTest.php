@@ -210,6 +210,25 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
+    /**
+     * Laravel trims strings and turns empty ones into null only in a request
+     * marked as JSON; read without that, `""` for product_lines slipped past
+     * the array rules and "  Jane  " was stored untrimmed.
+     */
+    public function test_does_not_read_a_body_without_a_json_content_type(): void
+    {
+        $response = $this->call(
+            'POST',
+            route('invoices.store'),
+            server: ['CONTENT_TYPE' => 'text/plain', 'HTTP_ACCEPT' => 'application/json'],
+            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ', 'product_lines' => '']),
+        );
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_ignores_fields_in_the_query_string(): void
     {
         $response = $this->postJson(

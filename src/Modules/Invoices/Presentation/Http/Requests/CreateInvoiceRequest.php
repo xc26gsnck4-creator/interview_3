@@ -24,17 +24,19 @@ final class CreateInvoiceRequest extends FormRequest
     }
 
     /**
-     * The API takes JSON only, so only the JSON body is validated: the query
-     * string never fills in a field, a form body is not read (so bytes that
-     * are not UTF-8 cannot reach the database; JSON decoding rejects them),
-     * and a malformed body validates as empty.
+     * The API takes JSON only, so only the body of a request marked as JSON is
+     * validated: the query string never fills in a field, a form or other body
+     * is not read (so bytes that are not UTF-8 cannot reach the database; JSON
+     * decoding rejects them), and a malformed body validates as empty. Laravel
+     * trims strings and turns empty ones into null only in a JSON request,
+     * which the rules rely on.
      *
      * @return array<string, mixed>
      */
     #[Override]
     public function validationData(): array
     {
-        return $this->json()->all();
+        return $this->isJson() ? $this->json()->all() : [];
     }
 
     /**
