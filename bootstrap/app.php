@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Exceptions\DatabaseLockedRenderer;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,4 +22,5 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             static fn (Request $request): bool => $request->is('api/*') || $request->expectsJson(),
         );
+        $exceptions->render(new DatabaseLockedRenderer);
     })->create();

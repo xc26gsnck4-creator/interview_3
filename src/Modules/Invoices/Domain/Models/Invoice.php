@@ -6,6 +6,7 @@ namespace Modules\Invoices\Domain\Models;
 
 use Database\Factories\Modules\Invoices\Domain\Models\InvoiceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -68,24 +69,21 @@ final class Invoice extends Model
 
     /**
      * Computed from the stored lines so it is never stale (one query per call).
-     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
-     * the sum across lines may not, so the addition is checked.
      */
     public function totalPrice(): int
     {
-        $total = 0;
+        return $this->sumLineTotals($this->productLines()->get());
+    }
 
-        foreach ($this->productLines()->get() as $line) {
-            $lineTotal = $line->totalUnitPrice();
-
-            if ($lineTotal > PHP_INT_MAX - $total) {
-                throw InvoiceTotalOverflow::forInvoice($this->id);
-            }
-
-            $total += $lineTotal;
-        }
-
-        return $total;
+    /**
+     * Summed from the loaded `productLines` relation (Eloquent loads it when it
+     * is not loaded yet). A response renders the total from the same lines it
+     * lists and runs no query after a write's commit; totalPrice() keeps
+     * reading the stored lines fresh.
+     */
+    public function totalPriceOfLoadedLines(): int
+    {
+        return $this->sumLineTotals($this->productLines);
     }
 
     /**
@@ -98,7 +96,9 @@ final class Invoice extends Model
     }
 
     /**
-     * The send rule, also usable as a dry check. The status is checked first.
+     * The send rule, also usable as a dry check. The status is checked first,
+     * the total last. The total is part of the rule because an invoice whose
+     * total cannot be computed could never be sent.
      * The stored lines are checked again although model writes already
      * guarantee them, so the rule reads completely here and also catches a row
      * written past the model events.
@@ -115,6 +115,12 @@ final class Invoice extends Model
 
         if (! $lines->every(static fn (InvoiceProductLine $line): bool => $line->hasValidAmounts())) {
             throw InvoiceNotSendable::invalidProductLine($this->id);
+        }
+
+        try {
+            $this->sumLineTotals($lines);
+        } catch (InvoiceTotalOverflow) {
+            throw InvoiceNotSendable::totalTooLarge($this->id);
         }
     }
 
@@ -162,6 +168,29 @@ final class Invoice extends Model
                 throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
             }
         });
+    }
+
+    /**
+     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
+     * the sum across lines may not, so the addition is checked.
+     *
+     * @param  Collection<int, InvoiceProductLine>  $lines
+     */
+    private function sumLineTotals(Collection $lines): int
+    {
+        $total = 0;
+
+        foreach ($lines as $line) {
+            $lineTotal = $line->totalUnitPrice();
+
+            if ($lineTotal > PHP_INT_MAX - $total) {
+                throw InvoiceTotalOverflow::forInvoice($this->id);
+            }
+
+            $total += $lineTotal;
+        }
+
+        return $total;
     }
 
     private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void

@@ -6,6 +6,7 @@ namespace Modules\Invoices\Application\Services;
 
 use Illuminate\Database\ConnectionInterface;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
+use Modules\Invoices\Application\Exceptions\SendNotRecorded;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Notifications\Api\Data\NotifyData;
 use Modules\Notifications\Api\NotificationFacadeInterface;
@@ -25,12 +26,15 @@ use Throwable;
  * rolls it back and the invoice stays draft. Other connections see the invoice
  * as draft until the commit; a delivery report that arrives before it waits
  * for the commit (see MarkInvoiceDeliveredService). Any throwable from
- * notify() counts as not sent, so
- * a provider that delivers and then throws is rolled back too. The lines are
- * loaded before the notification, so once notify() has returned only the
- * commit can undo the claim. Either way the invoice stays draft after the
- * customer was notified, and a retry notifies them again. Callers must not
- * wrap handle() in a transaction of their own, which would defer that commit.
+ * notify() counts as not sent, so a provider that delivers and then throws is
+ * rolled back too. The lines are loaded before the notification, so once
+ * notify() has returned only the commit can undo the claim (the application
+ * registers no afterCommit callbacks or committed listeners). A failure then
+ * means the customer was notified and the invoice stayed draft, so a retry
+ * notifies them again: it becomes SendNotRecorded. A failure before it (a
+ * lock error at BEGIN, a rule, NotificationFailed) passes through unchanged,
+ * so a lock 503 always means nothing happened. Callers must not wrap handle()
+ * in a transaction of their own, which would defer that commit.
  * The total is in minor units and is shown with two decimals, computed on ints.
  */
 final readonly class SendInvoiceService
@@ -42,27 +46,36 @@ final readonly class SendInvoiceService
 
     public function handle(string $invoiceId): Invoice
     {
-        return $this->connection->transaction(function () use ($invoiceId): Invoice {
-            $invoice = Invoice::findOrThrow($invoiceId);
-            $invoice->markAsSending();
-            $invoice->load('productLines');
+        $notifiedInvoiceId = null;
 
-            $total = $invoice->totalPrice();
+        try {
+            return $this->connection->transaction(function () use ($invoiceId, &$notifiedInvoiceId): Invoice {
+                $invoice = Invoice::findOrThrow($invoiceId);
+                $invoice->markAsSending();
 
-            $data = new NotifyData(
-                resourceId: Uuid::fromString($invoice->id),
-                toEmail: $invoice->customer_email,
-                subject: sprintf('Invoice %s', $invoice->id),
-                message: sprintf('Your invoice %s for a total of %d.%02d is ready.', $invoice->id, intdiv($total, 100), $total % 100),
-            );
+                $total = $invoice->totalPriceOfLoadedLines();
 
-            try {
-                $this->notifications->notify($data);
-            } catch (Throwable $throwable) {
-                throw NotificationFailed::forInvoice($invoice->id, $throwable);
-            }
+                $data = new NotifyData(
+                    resourceId: Uuid::fromString($invoice->id),
+                    toEmail: $invoice->customer_email,
+                    subject: sprintf('Invoice %s', $invoice->id),
+                    message: sprintf('Your invoice %s for a total of %d.%02d is ready.', $invoice->id, intdiv($total, 100), $total % 100),
+                );
 
-            return $invoice;
-        });
+                try {
+                    $this->notifications->notify($data);
+                } catch (Throwable $throwable) {
+                    throw NotificationFailed::forInvoice($invoice->id, $throwable);
+                }
+
+                $notifiedInvoiceId = $invoice->id;
+
+                return $invoice;
+            });
+        } catch (Throwable $throwable) {
+            throw_if($notifiedInvoiceId === null, $throwable);
+
+            throw SendNotRecorded::forInvoice($notifiedInvoiceId, $throwable);
+        }
     }
 }

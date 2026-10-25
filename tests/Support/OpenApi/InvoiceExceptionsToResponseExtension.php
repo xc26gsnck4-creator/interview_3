@@ -12,12 +12,12 @@ use Modules\Invoices\Infrastructure\Http\ExceptionHttpStatuses;
 use Override;
 
 /**
- * Documents the responses InvoiceServiceProvider renders for domain
+ * Documents the responses InvoiceServiceProvider renders for its mapped
  * exceptions: Scramble reads neither renderable() nor map(), and leaves out
  * an exception no extension handles. The `{"message": ...}` body is the one
- * Scramble documents for an HTTP exception; the status comes from the map the
- * provider renders from. Scramble is a dev dependency, so this class lives in
- * autoload-dev and config/scramble.php registers it.
+ * Scramble documents for an HTTP exception; the status comes from the maps the
+ * provider renders from (STATUSES joins them). Scramble is a dev dependency,
+ * so this class lives in autoload-dev and config/scramble.php registers it.
  */
 final class InvoiceExceptionsToResponseExtension extends HttpExceptionToResponseExtension
 {
