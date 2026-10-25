@@ -1,9 +1,11 @@
 {
     "$schema": "vendor/infection/infection/resources/schema.json",
-    // The Invoices module only: Notifications is the task's own code and
-    // stays unchanged, so its surviving mutants could not be acted on.
+    // The Invoices module and app/ (the runtime guards and the SQLite
+    // connection, INV-5b user decision). Notifications is the task's own code
+    // and stays unchanged, so its surviving mutants could not be acted on.
     "source": {
         "directories": [
+            "app",
             "src/Modules/Invoices"
         ]
     },
