@@ -39,8 +39,8 @@ final class SendInvoiceServiceTest extends TestCase
     {
         $invoice = Invoice::factory()->create(['customer_email' => 'billing@acme.test']);
         InvoiceProductLine::factory()->for($invoice)->forEachSequence(
-            ['name' => 'Consulting', 'quantity' => 2, 'unit_price' => 1500],
-            ['name' => 'Hosting', 'quantity' => 3, 'unit_price' => 100],
+            ['name' => 'Consulting', 'quantity' => 2, 'unit_price' => 6001],
+            ['name' => 'Hosting', 'quantity' => 3, 'unit_price' => 101],
         )->create();
 
         $sent = $this->service()->handle($invoice->id);
@@ -50,7 +50,7 @@ final class SendInvoiceServiceTest extends TestCase
         self::assertSame($invoice->id, $notification->resourceId->toString());
         self::assertSame('billing@acme.test', $notification->toEmail);
         self::assertSame(sprintf('Invoice %s', $invoice->id), $notification->subject);
-        self::assertSame(sprintf('Your invoice %s for a total of 3300 is ready.', $invoice->id), $notification->message);
+        self::assertSame(sprintf('Your invoice %s for a total of 123.05 is ready.', $invoice->id), $notification->message);
 
         self::assertSame($invoice->id, $sent->id);
         self::assertSame(StatusEnum::Sending, $sent->status);
