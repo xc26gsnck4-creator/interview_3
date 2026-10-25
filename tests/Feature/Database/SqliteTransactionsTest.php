@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
 use PDOException;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -168,6 +169,35 @@ final class SqliteTransactionsTest extends TestCase
         }, attempts: 2);
 
         self::assertSame([self::WAITER, self::WAITER], $rolledBack);
+    }
+
+    /**
+     * The rollback itself succeeded, so a listener that throws afterwards is
+     * not mistaken for a failed rollback: its exception propagates, as from
+     * Laravel's own rollBack(), and the waiter keeps its working connection.
+     */
+    public function test_rolled_back_listener_that_throws_after_a_failed_commit_keeps_the_connection(): void
+    {
+        $this->createLocksTable();
+        Event::listen(static function (TransactionRolledBack $event): never {
+            throw new RuntimeException('The listener failed.');
+        });
+        $this->reader->beginTransaction();
+        $this->reader->table('locks')->count();
+        $this->assertThrows(
+            function (): void {
+                $this->waiter->transaction(function (): void {
+                    $this->waiter->table('locks')->insert(['id' => 1]);
+                });
+            },
+            RuntimeException::class,
+            'The listener failed.',
+        );
+        $this->reader->commit();
+
+        $this->waiter->table('locks')->insert(['id' => 2]);
+
+        self::assertSame([2], $this->waiter->table('locks')->pluck('id')->all());
     }
 
     /**

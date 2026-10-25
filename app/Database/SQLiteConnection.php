@@ -12,14 +12,14 @@ use Throwable;
  * SQLite keeps a transaction open when its COMMIT fails, for example with
  * "database is locked" while a reader holds its lock past the busy timeout.
  * For a transaction run through transaction(), Laravel rolls it back only
- * before a retry and fires no event for it, so with a single attempt the
- * connection would keep SQLite's write lock and block every other writer until
- * it is closed. Here every failed commit is rolled back first, with the
- * rollingBack event, so its writes are discarded and the lock is released;
- * then Laravel decides whether to retry, and the transaction manager forgets
- * the failed transaction, so its afterCommit callbacks never run. A rollback
- * that fails too is reported, the handle is closed, which also releases the
- * lock, and the commit's exception propagates without a retry. A caller of
+ * before a retry and without its rollback bookkeeping, so with a single
+ * attempt the connection would keep SQLite's write lock and block every other
+ * writer until it is closed, and the failed transaction's afterCommit
+ * callbacks would stay pending. Here every failed commit first goes through
+ * Laravel's own rollBack(): the PDO rollback, the transaction level, the
+ * transaction manager and the rollingBack event, in its order. Then Laravel
+ * decides whether to retry. A listener or callback that throws after a
+ * successful rollback propagates as it does from rollBack(). A caller of
  * beginTransaction() and commit() keeps the transaction level after a failed
  * commit and rolls back itself.
  */
@@ -28,53 +28,35 @@ final class SQLiteConnection extends BaseSQLiteConnection
     #[Override]
     protected function handleCommitTransactionException(Throwable $e, mixed $currentAttempt, mixed $maxAttempts): void
     {
-        $rolledBack = $this->rollBackOpenTransaction();
-
         try {
-            if (! $rolledBack) {
-                $this->transactions = 0;
-
-                throw $e;
-            }
-
-            parent::handleCommitTransactionException($e, $currentAttempt, $maxAttempts);
-        } finally {
-            $this->forgetFailedTransaction();
-        }
-    }
-
-    /**
-     * Returns false when the rollback failed too and the handle was closed.
-     */
-    private function rollBackOpenTransaction(): bool
-    {
-        try {
-            $pdo = $this->getPdo();
-
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-                $this->fireConnectionEvent('rollingBack');
-            }
-
-            return true;
+            $this->rollBack();
         } catch (Throwable $throwable) {
-            report($throwable);
-            $this->disconnect();
+            throw_if($this->transactionLevel() === 0, $throwable);
 
-            return false;
+            $this->closeFailedTransaction($throwable);
+
+            throw $e;
         }
+
+        parent::handleCommitTransactionException($e, $currentAttempt, $maxAttempts);
     }
 
     /**
-     * The manager keys its records by connection name, which every connection
-     * the database manager builds has.
+     * The PDO rollback failed too (the level is still the committed one), so
+     * SQLite still holds the transaction and its write lock. Closing the handle
+     * first releases both, even if an afterRollBack callback then throws while
+     * disconnect() makes the manager forget the transaction. The failure is
+     * reported last, so a reporter that writes to this database cannot write
+     * into the failed transaction. The commit's exception then propagates
+     * without a retry, because a closed handle cannot be retried.
      */
-    private function forgetFailedTransaction(): void
+    private function closeFailedTransaction(Throwable $rollbackFailure): void
     {
-        $name = $this->getName();
-
-        if ($name !== null) {
-            $this->transactionsManager?->rollback($name, $this->transactions);
+        try {
+            $this->setPdo(null);
+            $this->disconnect();
+        } finally {
+            report($rollbackFailure);
         }
     }
 }
