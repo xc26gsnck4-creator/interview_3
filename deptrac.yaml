@@ -9,7 +9,7 @@
 # on) stays free of the internals, and it cannot depend on Invoices.
 #
 # App (app/, holding AppServiceProvider and the SQLiteConnection it registers,
-# which import framework classes and each other alone) is a layer with no
+# which import only framework classes, PHP's own and each other) is a layer with no
 # allowed dependencies on other layers, so that an Invoices import of App\* is
 # a violation rather than an uncovered dependency.
 deptrac:

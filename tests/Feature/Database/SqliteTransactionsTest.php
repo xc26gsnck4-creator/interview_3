@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Database;
 
+use App\Database\SQLiteConnection;
 use Closure;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Events\TransactionRolledBack;
@@ -77,6 +78,15 @@ final class SqliteTransactionsTest extends TestCase
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * Package providers register before the application's, so one that
+     * resolved a connection in register() would leave Laravel's own class.
+     */
+    public function test_default_connection_is_built_as_the_application_sqlite_connection(): void
+    {
+        self::assertInstanceOf(SQLiteConnection::class, DB::connection());
     }
 
     public function test_default_connection_waits_up_to_five_seconds_for_a_lock(): void
