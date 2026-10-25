@@ -13,7 +13,6 @@ use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
-use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Modules\Notifications\Api\NotificationFacadeInterface;
@@ -139,9 +138,9 @@ final class SendInvoiceServiceTest extends TestCase
 
     /**
      * Each line is valid, but the sum of three MAX_VALUE x MAX_VALUE lines
-     * exceeds PHP's int, so the message cannot be built after the claim.
+     * exceeds PHP's int, so the send rule rejects it before the claim.
      */
-    public function test_rolls_back_to_draft_when_the_total_overflows(): void
+    public function test_rejects_an_invoice_whose_total_overflows_and_does_not_notify(): void
     {
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->count(3)->for($invoice)->create([
@@ -151,8 +150,8 @@ final class SendInvoiceServiceTest extends TestCase
 
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
-            InvoiceTotalOverflow::class,
-            sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
+            InvoiceNotSendable::class,
+            sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id),
         );
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);

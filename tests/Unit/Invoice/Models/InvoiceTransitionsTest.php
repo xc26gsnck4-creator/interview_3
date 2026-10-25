@@ -82,6 +82,21 @@ final class InvoiceTransitionsTest extends TestCase
         yield 'sent to client' => [StatusEnum::SentToClient];
     }
 
+    public function test_ensure_can_be_sent_throws_not_sendable_when_the_total_overflows(): void
+    {
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
+            'quantity' => InvoiceProductLine::MAX_VALUE,
+            'unit_price' => InvoiceProductLine::MAX_VALUE,
+        ]);
+
+        $this->assertThrows(
+            fn () => $invoice->ensureCanBeSent(),
+            InvoiceNotSendable::class,
+            sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id),
+        );
+    }
+
     /**
      * The invoice has no lines, so the status check is proven to run first.
      */
