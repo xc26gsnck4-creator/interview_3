@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Invoice\Http;
 
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Illuminate\Testing\TestResponse;
 use Iterator;
@@ -64,6 +68,27 @@ final class CreateInvoiceTest extends TestCase
             'quantity' => 2,
             'unit_price' => 15000,
         ]);
+        $this->assertMatchesContract($response, 201);
+    }
+
+    public function test_runs_no_query_after_the_commit(): void
+    {
+        $committed = false;
+        $queriesAfterCommit = [];
+        Event::listen(TransactionCommitted::class, static function () use (&$committed): void {
+            $committed = true;
+        });
+        DB::listen(static function (QueryExecuted $query) use (&$committed, &$queriesAfterCommit): void {
+            if ($committed) {
+                $queriesAfterCommit[] = $query->sql;
+            }
+        });
+
+        $response = $this->postJson(route('invoices.store'), self::PAYLOAD);
+
+        $response->assertCreated();
+        self::assertTrue($committed);
+        self::assertSame([], $queriesAfterCommit);
         $this->assertMatchesContract($response, 201);
     }
 

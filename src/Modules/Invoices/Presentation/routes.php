@@ -10,3 +10,4 @@ Route::pattern('invoice', (new GenericValidator)->getPattern());
 
 Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
 Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+Route::post('/invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send');

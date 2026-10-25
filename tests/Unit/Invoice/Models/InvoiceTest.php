@@ -129,9 +129,24 @@ final class InvoiceTest extends TestCase
     public static function totalComputations(): Iterator
     {
         yield 'totalPrice' => [static fn (Invoice $invoice): int => $invoice->totalPrice()];
+        yield 'totalPriceOfLoadedLines' => [static fn (Invoice $invoice): int => $invoice->totalPriceOfLoadedLines()];
         yield 'ensureTotalFits' => [static function (Invoice $invoice): void {
             $invoice->ensureTotalFits();
         }];
+    }
+
+    public function test_total_price_of_loaded_lines_sums_the_loaded_relation(): void
+    {
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->for($invoice)->forEachSequence(
+            ['quantity' => 2, 'unit_price' => 1000],
+            ['quantity' => 3, 'unit_price' => 500],
+        )->create();
+        $invoice->load('productLines');
+        InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 1, 'unit_price' => 700]);
+
+        self::assertSame(3500, $invoice->totalPriceOfLoadedLines());
+        self::assertSame(4200, $invoice->totalPrice());
     }
 
     /**

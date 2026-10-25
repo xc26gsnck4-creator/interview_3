@@ -17,4 +17,9 @@ final class InvoiceNotSendable extends DomainException
     {
         return new self(sprintf('Invoice %s cannot be sent: a product line has an invalid quantity or unit price.', $invoiceId));
     }
+
+    public static function totalTooLarge(string $invoiceId): self
+    {
+        return new self(sprintf('Invoice %s cannot be sent: the total of its product lines exceeds %d.', $invoiceId, PHP_INT_MAX));
+    }
 }

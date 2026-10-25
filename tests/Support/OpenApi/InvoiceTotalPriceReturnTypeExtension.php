@@ -13,8 +13,9 @@ use Modules\Invoices\Domain\Models\Invoice;
 
 /**
  * Scramble infers a method's return type from its body, and it does not follow
- * `$total += ...`, so it documents Invoice::totalPrice() as the literal 0 the
- * sum starts from. This gives it the method's declared type instead.
+ * `$total += ...`, so it documents Invoice::totalPrice() and
+ * Invoice::totalPriceOfLoadedLines() as the literal 0 the sum starts from.
+ * This gives them the methods' declared type instead.
  * Registered from config/scramble.php.
  */
 final class InvoiceTotalPriceReturnTypeExtension implements MethodReturnTypeExtension
@@ -26,6 +27,6 @@ final class InvoiceTotalPriceReturnTypeExtension implements MethodReturnTypeExte
 
     public function getMethodReturnType(MethodCallEvent $event): ?Type
     {
-        return $event->getName() === 'totalPrice' ? new IntegerType : null;
+        return in_array($event->getName(), ['totalPrice', 'totalPriceOfLoadedLines'], true) ? new IntegerType : null;
     }
 }
