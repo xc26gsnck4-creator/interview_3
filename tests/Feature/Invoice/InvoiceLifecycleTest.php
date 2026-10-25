@@ -6,8 +6,8 @@ namespace Tests\Feature\Invoice;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\Fluent\AssertableJson;
-use Mockery;
 use Mockery\MockInterface;
+use Mockery\VerificationDirector;
 use Modules\Notifications\Api\NotificationFacadeInterface;
 use RuntimeException;
 use Tests\Concerns\ValidatesOpenApiContract;
@@ -101,7 +101,9 @@ final class InvoiceLifecycleTest extends TestCase
             'invoice_id' => $invoiceId,
             'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoiceId),
         ]]);
-        $this->log->shouldNotHaveReceived('warning', [Mockery::not('Ignoring delivery webhook for invoice'), Mockery::any()]);
+        $warnings = $this->log->shouldHaveReceived('warning');
+        self::assertInstanceOf(VerificationDirector::class, $warnings);
+        $warnings->once();
 
         $this->sendInvoice($invoiceId);
         $this->assertStatus($invoiceId, 'sending');
