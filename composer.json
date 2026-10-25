@@ -12,6 +12,7 @@
         "ramsey/uuid": "^4.9"
     },
     "require-dev": {
+        "ext-pdo": "*",
         "dedoc/scramble": "^0.13.49",
         "deptrac/deptrac": "^4.7",
         "driftingly/rector-laravel": "^2.7",
