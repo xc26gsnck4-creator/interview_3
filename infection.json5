@@ -24,6 +24,9 @@
             ]
         }
     },
+    // The drift test fails on any change to the generated document, so it would
+    // kill every mutant of a form request or resource on its own (INV-7 probe).
+    "testFrameworkOptions": "--exclude-group=openapi-document",
     // Covered MSI only, by user decision: a mutant on a line no test runs
     // does not count, so untested code passes this gate.
     "minCoveredMsi": 100

@@ -89,6 +89,15 @@ final class Invoice extends Model
     }
 
     /**
+     * Each line total fits in int, but the sum of several may not; an invoice
+     * whose total cannot be computed could never be shown or sent.
+     */
+    public function ensureTotalFits(): void
+    {
+        $this->totalPrice();
+    }
+
+    /**
      * The send rule, also usable as a dry check. The status is checked first.
      * The stored lines are checked again although model writes already
      * guarantee them, so the rule reads completely here and also catches a row

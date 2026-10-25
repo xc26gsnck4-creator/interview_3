@@ -9,7 +9,9 @@ use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Application\Services\CreateInvoiceService;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
+use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
+use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Tests\TestCase;
 
 final class CreateInvoiceServiceTest extends TestCase
@@ -80,6 +82,20 @@ final class CreateInvoiceServiceTest extends TestCase
             fn (): Invoice => $this->service()->handle($data),
             InvalidProductLine::class,
             'Product line quantity must be a positive integer, 0 given.',
+        );
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_product_lines', 0);
+    }
+
+    public function test_persists_nothing_when_the_total_overflows(): void
+    {
+        $line = new ProductLineData(name: 'Bulk', quantity: InvoiceProductLine::MAX_VALUE, unitPrice: InvoiceProductLine::MAX_VALUE);
+        $data = new CreateInvoiceData(customerName: 'Acme', customerEmail: 'billing@acme.test', productLines: [$line, $line, $line]);
+
+        $this->assertThrows(
+            fn (): Invoice => $this->service()->handle($data),
+            InvoiceTotalOverflow::class,
+            'exceeds the maximum representable integer.',
         );
         $this->assertDatabaseCount('invoices', 0);
         $this->assertDatabaseCount('invoice_product_lines', 0);

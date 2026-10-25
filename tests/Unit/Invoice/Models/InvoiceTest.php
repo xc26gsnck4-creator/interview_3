@@ -152,6 +152,21 @@ final class InvoiceTest extends TestCase
         self::assertSame(PHP_INT_MAX, $invoice->totalPrice());
     }
 
+    public function test_ensure_total_fits_throws_when_the_sum_overflows(): void
+    {
+        $invoice = Invoice::factory()->create();
+        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
+            'quantity' => InvoiceProductLine::MAX_VALUE,
+            'unit_price' => InvoiceProductLine::MAX_VALUE,
+        ]);
+
+        $this->assertThrows(
+            fn () => $invoice->ensureTotalFits(),
+            InvoiceTotalOverflow::class,
+            sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
+        );
+    }
+
     public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
     {
         $invoice = Invoice::factory()->create();
