@@ -13,7 +13,7 @@ use Modules\Invoices\Domain\Models\Invoice;
  * The namespace mirrors the model's so Laravel's default factory resolution finds
  * it without the model referencing the factory.
  *
- * sending() and sentToClient() are create()-only states: make() yields a draft,
+ * inStatus(), sending() and sentToClient() are create()-only states: make() yields a draft,
  * because the model's creating invariant forbids constructing a non-draft invoice,
  * so the states apply their status in afterCreating.
  *
@@ -35,29 +35,28 @@ final class InvoiceFactory extends Factory
 
     public function sending(): self
     {
-        return $this->afterCreating(static function (Invoice $invoice): void {
-            self::forceStatus($invoice, StatusEnum::Sending);
-        });
+        return $this->inStatus(StatusEnum::Sending);
     }
 
     public function sentToClient(): self
     {
-        return $this->afterCreating(static function (Invoice $invoice): void {
-            self::forceStatus($invoice, StatusEnum::SentToClient);
+        return $this->inStatus(StatusEnum::SentToClient);
+    }
+
+    /**
+     * Explicit test-only bypass of the creation invariant: invoices are created
+     * as draft and then moved to the requested status without model events.
+     * Draft leaves the invoice as created.
+     */
+    public function inStatus(StatusEnum $status): self
+    {
+        return $this->afterCreating(static function (Invoice $invoice) use ($status): void {
+            $invoice->forceFill(['status' => $status])->saveQuietly();
         });
     }
 
     public function withLines(int $count = 1): self
     {
         return $this->has(InvoiceProductLineFactory::new()->count($count), 'productLines');
-    }
-
-    /**
-     * Explicit test-only bypass of the creation invariant: invoices are created
-     * as draft and then moved to the requested status without model events.
-     */
-    private static function forceStatus(Invoice $invoice, StatusEnum $status): void
-    {
-        $invoice->forceFill(['status' => $status])->saveQuietly();
     }
 }
