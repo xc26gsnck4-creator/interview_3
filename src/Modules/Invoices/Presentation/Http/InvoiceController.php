@@ -16,8 +16,9 @@ use Modules\Invoices\Presentation\Http\Resources\InvoiceResource;
 /**
  * Each action calls one application service. Domain exceptions are mapped to
  * HTTP by InvoiceServiceProvider; an action's @throws tags name the mapped
- * ones it answers with, for the API document (store's 422s come from its form
- * request). Action PHPDoc summaries are published in the API document, so the
+ * ones it answers with, for the API document (store's 422 is the form
+ * request's validation error, which store() also raises for an overflowing
+ * total). Action PHPDoc summaries are published in the API document, so the
  * reasons live here.
  *
  * store(): lines whose total does not fit in int are a fault in the submitted

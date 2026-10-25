@@ -118,6 +118,21 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
+    /**
+     * The check that tells a JSON object from an array adds its error only for
+     * a value the array rules accepted, so no message is reported twice.
+     */
+    public function test_reports_each_product_lines_error_once(): void
+    {
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => 'x']);
+
+        $response->assertUnprocessable()->assertJsonPath('errors.product_lines', [
+            'The product lines field must be an array.',
+            'The product lines field must be a list.',
+        ]);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_accepts_the_maximum_of_1000_lines(): void
     {
         $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => array_fill(0, 1000, self::LINE)]);
@@ -150,6 +165,7 @@ final class CreateInvoiceTest extends TestCase
         yield 'product lines as an object' => [[...self::PAYLOAD, 'product_lines' => ['first' => self::LINE]], 'product_lines'];
         yield 'product lines as an empty object' => [[...self::PAYLOAD, 'product_lines' => (object) []], 'product_lines'];
         yield 'product lines as an object with numeric keys' => [[...self::PAYLOAD, 'product_lines' => (object) [self::LINE]], 'product_lines'];
+        yield 'product lines as an object next to a NUL-prefixed key' => [[...self::PAYLOAD, 'product_lines' => (object) [], "\0" => 0], 'product_lines'];
         yield '1001 product lines' => [[...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, self::LINE)], 'product_lines'];
         yield 'empty line name' => [self::withLine([...self::LINE, 'name' => '']), 'product_lines.0.name'];
         yield 'blank line name' => [self::withLine([...self::LINE, 'name' => '   ']), 'product_lines.0.name'];

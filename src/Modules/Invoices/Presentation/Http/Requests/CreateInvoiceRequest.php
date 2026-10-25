@@ -14,9 +14,10 @@ use Override;
 final class CreateInvoiceRequest extends FormRequest
 {
     /**
-     * Bounds the work one request does: the count is checked before the
-     * per-line rules are built, and every line is inserted and read back while
-     * SQLite's write lock is held.
+     * Bounds the lines one request inserts and reads back while SQLite's write
+     * lock is held; the count is checked before the per-line rules are built.
+     * Validation itself stays linear in the body size (what a line carries
+     * besides its fields is flattened too), as JSON decoding does.
      */
     private const int MAX_PRODUCT_LINES = 1000;
 
@@ -73,17 +74,24 @@ final class CreateInvoiceRequest extends FormRequest
      * the per-line rules over every submitted line before any rule runs, so
      * its own rules (a list of at most MAX_PRODUCT_LINES) run before the lines
      * are validated. JSON is decoded into PHP arrays, where `{}` and
-     * `{"0": ...}` pass as lists, so the raw body of a JSON request is decoded
-     * once more to reject an object, as the `list` rule would.
+     * `{"0": ...}` pass as lists, so when the array rules accepted
+     * product_lines the raw body is decoded once more, keeping objects, and
+     * must show a JSON array there. The check fails closed: a body that
+     * decodes only into arrays (a key starting with NUL is no valid property
+     * name) reports the `list` error too.
      */
     #[Override]
     protected function prepareForValidation(): void
     {
         $validator = validator($this->validationData(), ['product_lines' => $this->rules()['product_lines']]);
         $validator->after(function (Validator $validator): void {
-            $body = $this->isJson() ? json_decode($this->getContent()) : null;
+            if (! is_array($this->validationData()['product_lines'] ?? null)) {
+                return;
+            }
 
-            if (is_object($body) && property_exists($body, 'product_lines') && is_object($body->product_lines)) {
+            $body = json_decode($this->getContent());
+
+            if (! is_object($body) || ! is_array(get_object_vars($body)['product_lines'])) {
                 $validator->addFailure('product_lines', 'list');
             }
         });
