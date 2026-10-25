@@ -11,15 +11,3 @@ parameters:
 			identifier: shipmonk.deadMethod
 			count: 1
 			path: src/Modules/Invoices/Application/Services/SendInvoiceService.php
-
-		-
-			message: '#^Unused Modules\\Invoices\\Domain\\Models\\Invoice\:\:markAsSentToClient \(all usages excluded by tests excluder\)$#'
-			identifier: shipmonk.deadMethod
-			count: 1
-			path: src/Modules/Invoices/Domain/Models/Invoice.php
-
-		-
-			message: '#^Property Modules\\Notifications\\Api\\Events\\WebhookDeliveredEvent\:\:\$resourceId is never read$#'
-			identifier: shipmonk.deadProperty.neverRead
-			count: 1
-			path: src/Modules/Notifications/Api/Events/WebhookDeliveredEvent.php
