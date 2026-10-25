@@ -8,10 +8,18 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Testing\AssertableJsonString;
+use PHPUnit\Framework\Attributes\Group;
 use Spectator\Spectator;
 use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
+/**
+ * Excluded from mutation testing (infection.json5): Scramble reads the form
+ * request rules and the resources while it generates the document, so any
+ * mutant there changes the document and fails the drift check, even where no
+ * test of the behaviour would notice.
+ */
+#[Group('openapi-document')]
 final class OpenApiDocumentTest extends TestCase
 {
     use ValidatesOpenApiContract;
