@@ -57,14 +57,23 @@ final class ClosedResponseObjectsExtension extends OperationExtension
      */
     private function closeType(mixed $type, SplObjectStorage $visited): void
     {
-        $type = $type instanceof Reference ? $type->resolve() : $type;
-        $type = $type instanceof Schema ? $type->type : $type;
-
         if (! is_object($type) || $visited->offsetExists($type)) {
             return;
         }
 
         $visited->offsetSet($type);
+
+        if ($type instanceof Reference) {
+            $this->closeType($type->resolve(), $visited);
+
+            return;
+        }
+
+        if ($type instanceof Schema) {
+            $this->closeType($type->type, $visited);
+
+            return;
+        }
 
         if ($type instanceof ArrayType) {
             $this->closeType($type->items, $visited);

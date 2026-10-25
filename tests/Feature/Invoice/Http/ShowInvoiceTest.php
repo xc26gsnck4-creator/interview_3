@@ -109,6 +109,6 @@ final class ShowInvoiceTest extends TestCase
 
         $response->assertNotFound()
             ->assertHeader('Content-Type', 'application/json')
-            ->assertJsonPath('message', 'The route api/invoices/not-a-uuid could not be found.');
+            ->assertExactJson(['message' => 'The route api/invoices/not-a-uuid could not be found.']);
     }
 }

@@ -72,13 +72,15 @@ final class ClosedResponseSchemasTest extends TestCase
         $document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
         $openObjects = [];
         $unresolved = [];
+        $allOfs = [];
         $visited = [];
 
         foreach ($this->responseRoots($document) as $path => $response) {
-            $this->walkSchema($document, $response, $path, $openObjects, $unresolved, $visited);
+            $this->walkSchema($document, $response, $path, $openObjects, $unresolved, $allOfs, $visited);
         }
 
         self::assertSame([], $unresolved, 'These $ref values do not resolve inside api.json.');
+        self::assertSame([], $allOfs, 'allOf in a response: do not close its branches one by one, close the parent with unevaluatedProperties: false.');
         self::assertSame([], $openObjects, 'These response objects have properties but additionalProperties is not false.');
         self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $visited);
     }
@@ -108,15 +110,18 @@ final class ClosedResponseSchemasTest extends TestCase
 
     /**
      * Follows `$ref` (each once), `content.*.schema`, `properties`, `items`,
-     * `allOf`, `anyOf`, `oneOf` and a schema-valued `additionalProperties`. An
-     * object with properties is open unless additionalProperties is false.
+     * `anyOf`, `oneOf` and a schema-valued `additionalProperties`. An object
+     * with properties is open unless additionalProperties is false. An `allOf`
+     * is only recorded: closing its branches one by one would make them reject
+     * each other's properties.
      *
      * @param  array<array-key, mixed>  $document
      * @param  list<string>  $openObjects
      * @param  list<string>  $unresolved
+     * @param  list<string>  $allOfs
      * @param  array<string, true>  $visited
      */
-    private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$unresolved, array &$visited): void
+    private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$unresolved, array &$allOfs, array &$visited): void
     {
         $node = $this->asArray($node);
         $reference = $node['$ref'] ?? null;
@@ -129,7 +134,7 @@ final class ClosedResponseSchemasTest extends TestCase
                 if ($target === null) {
                     $unresolved[] = $path.' -> '.$reference;
                 } else {
-                    $this->walkSchema($document, $target, $reference, $openObjects, $unresolved, $visited);
+                    $this->walkSchema($document, $target, $reference, $openObjects, $unresolved, $allOfs, $visited);
                 }
             }
 
@@ -141,22 +146,26 @@ final class ClosedResponseSchemasTest extends TestCase
         }
 
         foreach ($this->asArray($node['content'] ?? null) as $mediaType => $media) {
-            $this->walkSchema($document, $this->asArray($media)['schema'] ?? null, $path.' '.$mediaType, $openObjects, $unresolved, $visited);
+            $this->walkSchema($document, $this->asArray($media)['schema'] ?? null, $path.' '.$mediaType, $openObjects, $unresolved, $allOfs, $visited);
         }
 
         foreach ($this->asArray($node['properties'] ?? null) as $name => $property) {
-            $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $unresolved, $visited);
+            $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $unresolved, $allOfs, $visited);
         }
 
-        foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
+        if (isset($node['allOf'])) {
+            $allOfs[] = $path;
+        }
+
+        foreach (['anyOf', 'oneOf'] as $keyword) {
             foreach ($this->asArray($node[$keyword] ?? null) as $index => $branch) {
-                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $unresolved, $visited);
+                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $unresolved, $allOfs, $visited);
             }
         }
 
         foreach (['items' => '[]', 'additionalProperties' => '.*'] as $keyword => $suffix) {
             if (isset($node[$keyword])) {
-                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $unresolved, $visited);
+                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $unresolved, $allOfs, $visited);
             }
         }
     }
