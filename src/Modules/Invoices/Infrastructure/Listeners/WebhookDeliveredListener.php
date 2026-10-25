@@ -16,9 +16,9 @@ use Psr\Log\LoggerInterface;
  * is logged and ignored, so the webhook still answers 204. Only those two
  * rejections are caught. Anything else, such as a database-locked error at
  * BEGIN, propagates and the webhook answers 500, which the provider can retry.
- * A row deleted between the lookup and the transition would surface as
- * Eloquent's ModelNotFoundException from the transition's re-read, but the
- * service holds the write lock from BEGIN, so that cannot happen.
+ * Eloquent's ModelNotFoundException is not among them: the service holds the
+ * write lock from the lookup to the transition, so the row cannot be deleted
+ * in between.
  */
 final readonly class WebhookDeliveredListener
 {

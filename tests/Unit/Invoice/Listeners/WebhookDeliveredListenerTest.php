@@ -7,7 +7,6 @@ namespace Tests\Unit\Invoice\Listeners;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Iterator;
-use Modules\Invoices\Application\Services\MarkInvoiceDeliveredService;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Infrastructure\Listeners\WebhookDeliveredListener;
@@ -28,6 +27,9 @@ final class WebhookDeliveredListenerTest extends TestCase
         parent::setUp();
 
         $this->logger = $this->createMock(LoggerInterface::class);
+        $this->app->when(WebhookDeliveredListener::class)
+            ->needs(LoggerInterface::class)
+            ->give(fn (): LoggerInterface => $this->logger);
     }
 
     public function test_marks_sending_invoice_delivered(): void
@@ -81,7 +83,7 @@ final class WebhookDeliveredListenerTest extends TestCase
      */
     public function test_lets_an_unexpected_error_propagate_without_a_warning(): void
     {
-        $invoice = Invoice::factory()->withLines()->sending()->create();
+        $invoice = Invoice::factory()->create();
         DB::table('invoices')->where('id', $invoice->id)->update(['status' => 'archived']);
         $this->logger->expects($this->never())->method(self::anything());
 
@@ -96,7 +98,7 @@ final class WebhookDeliveredListenerTest extends TestCase
 
     private function listener(): WebhookDeliveredListener
     {
-        return new WebhookDeliveredListener($this->app->make(MarkInvoiceDeliveredService::class), $this->logger);
+        return $this->app->make(WebhookDeliveredListener::class);
     }
 
     private function deliveredEvent(string $invoiceId): WebhookDeliveredEvent
