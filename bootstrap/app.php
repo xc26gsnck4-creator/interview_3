@@ -18,9 +18,6 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // The API answers JSON whatever the Accept header: without this, a
-        // client sending curl's default `*/*` gets a failed validation as a
-        // redirect and other errors as HTML.
         $exceptions->shouldRenderJsonWhen(
             static fn (Request $request): bool => $request->is('api/*') || $request->expectsJson(),
         );

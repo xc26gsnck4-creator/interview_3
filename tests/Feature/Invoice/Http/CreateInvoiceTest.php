@@ -183,6 +183,48 @@ final class CreateInvoiceTest extends TestCase
     }
 
     /**
+     * The API takes JSON only: a form body is not read at all, so bytes that
+     * are not valid UTF-8 (which the response could not encode) never reach
+     * the database.
+     */
+    public function test_ignores_a_form_body_and_answers_422(): void
+    {
+        $response = $this->post(route('invoices.store'), ['customer_name' => "\xFF", 'customer_email' => 'jane@example.com']);
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    public function test_treats_a_malformed_json_body_as_empty_and_answers_422(): void
+    {
+        $response = $this->call(
+            'POST',
+            route('invoices.store', ['customer_name' => 'Jane Doe', 'customer_email' => 'jane@example.com']),
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: '{"product_lines":[',
+        );
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    public function test_ignores_fields_in_the_query_string(): void
+    {
+        $response = $this->postJson(
+            route('invoices.store', ['customer_email' => 'jane@example.com']),
+            Arr::except(self::PAYLOAD, ['customer_email']),
+        );
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['customer_email'])
+            ->assertJsonMissingValidationErrors(['customer_name']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    /**
      * curl sends `Accept: *\/*`; without an explicit JSON Accept header Laravel
      * would redirect a failed validation to the previous URL.
      */

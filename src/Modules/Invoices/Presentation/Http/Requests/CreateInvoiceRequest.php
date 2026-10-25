@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Override;
 
 final class CreateInvoiceRequest extends FormRequest
 {
@@ -20,6 +21,20 @@ final class CreateInvoiceRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * The API takes JSON only, so only the JSON body is validated: the query
+     * string never fills in a field, a form body is not read (so bytes that
+     * are not UTF-8 cannot reach the database; JSON decoding rejects them),
+     * and a malformed body validates as empty.
+     *
+     * @return array<string, mixed>
+     */
+    #[Override]
+    public function validationData(): array
+    {
+        return $this->json()->all();
     }
 
     /**

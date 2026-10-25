@@ -10,8 +10,6 @@ use Illuminate\Foundation\Exceptions\Handler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Validation\ValidationException;
-use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Infrastructure\Http\ExceptionHttpStatuses;
 use Modules\Invoices\Infrastructure\Listeners\WebhookDeliveredListener;
 use Modules\Notifications\Api\Events\WebhookDeliveredEvent;
@@ -35,15 +33,11 @@ final class InvoiceServiceProvider extends ServiceProvider
 
     /**
      * Domain exceptions know nothing about HTTP, and bootstrap/app.php knows
-     * nothing about invoices, so the module maps them here. Artisan commands
-     * run with Collision's console handler, which renders no HTTP responses, so
-     * only the framework's own handler gets the mappings. The mapped exceptions
-     * are client errors (4xx), so they are not reported either.
-     *
-     * An overflowing total reaches HTTP when an invoice is created, where it is
-     * a fault in the submitted lines: it answers the same validation error as
-     * any other bad line, and the invoice it names was rolled back, so its id
-     * is left out.
+     * nothing about invoices, so the module maps them here. Only the
+     * framework's own handler gets the mappings: in console runs with the dev
+     * dependencies, Collision wraps it in a console handler, and console runs
+     * render no HTTP responses anyway. The mapped exceptions are client errors
+     * (4xx), so they are not reported either.
      */
     private static function renderDomainExceptions(Handler $handler): void
     {
@@ -53,8 +47,5 @@ final class InvoiceServiceProvider extends ServiceProvider
 
             return $status === null ? null : new JsonResponse(['message' => $exception->getMessage()], $status);
         });
-        $handler->map(InvoiceTotalOverflow::class, static fn (): ValidationException => ValidationException::withMessages([
-            'product_lines' => 'The total of the product lines must not exceed '.PHP_INT_MAX.'.',
-        ]));
     }
 }
