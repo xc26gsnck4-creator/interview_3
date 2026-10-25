@@ -102,6 +102,22 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 201);
     }
 
+    /**
+     * Laravel expands the per-line rules over every submitted line before any
+     * rule runs, so the count is checked first: the lines of an oversized body
+     * are never validated.
+     */
+    public function test_rejects_more_than_1000_lines_before_validating_them(): void
+    {
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, ['name' => ''])]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['product_lines'])
+            ->assertJsonMissingValidationErrors(['product_lines.0.name']);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_accepts_the_maximum_of_1000_lines(): void
     {
         $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => array_fill(0, 1000, self::LINE)]);
@@ -132,6 +148,8 @@ final class CreateInvoiceTest extends TestCase
         yield 'customer email of 256 characters' => [[...self::PAYLOAD, 'customer_email' => self::validEmailOf256Characters()], 'customer_email'];
         yield 'product lines as a string' => [[...self::PAYLOAD, 'product_lines' => 'x'], 'product_lines'];
         yield 'product lines as an object' => [[...self::PAYLOAD, 'product_lines' => ['first' => self::LINE]], 'product_lines'];
+        yield 'product lines as an empty object' => [[...self::PAYLOAD, 'product_lines' => (object) []], 'product_lines'];
+        yield 'product lines as an object with numeric keys' => [[...self::PAYLOAD, 'product_lines' => (object) [self::LINE]], 'product_lines'];
         yield '1001 product lines' => [[...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, self::LINE)], 'product_lines'];
         yield 'empty line name' => [self::withLine([...self::LINE, 'name' => '']), 'product_lines.0.name'];
         yield 'blank line name' => [self::withLine([...self::LINE, 'name' => '   ']), 'product_lines.0.name'];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Presentation\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
@@ -13,8 +14,9 @@ use Override;
 final class CreateInvoiceRequest extends FormRequest
 {
     /**
-     * Bounds the work one request does: every line is validated, inserted and
-     * read back while SQLite's write lock is held.
+     * Bounds the work one request does: the count is checked before the
+     * per-line rules are built, and every line is inserted and read back while
+     * SQLite's write lock is held.
      */
     private const int MAX_PRODUCT_LINES = 1000;
 
@@ -28,8 +30,8 @@ final class CreateInvoiceRequest extends FormRequest
      * validated: the query string never fills in a field, a form or other body
      * is not read (so bytes that are not UTF-8 cannot reach the database; JSON
      * decoding rejects them), and a malformed body validates as empty. Laravel
-     * trims strings and turns empty ones into null only in a JSON request,
-     * which the rules rely on.
+     * trims the strings of a JSON body and turns empty ones into null only when
+     * the request is marked as JSON, which the rules rely on.
      *
      * @return array<string, mixed>
      */
@@ -64,6 +66,28 @@ final class CreateInvoiceRequest extends FormRequest
             'product_lines.*.quantity' => $amount,
             'product_lines.*.unit_price' => $amount,
         ];
+    }
+
+    /**
+     * The shape of product_lines is checked first, on its own. Laravel expands
+     * the per-line rules over every submitted line before any rule runs, so
+     * its own rules (a list of at most MAX_PRODUCT_LINES) run before the lines
+     * are validated. JSON is decoded into PHP arrays, where `{}` and
+     * `{"0": ...}` pass as lists, so the raw body is decoded once more to
+     * reject an object.
+     */
+    #[Override]
+    protected function prepareForValidation(): void
+    {
+        $validator = validator($this->validationData(), ['product_lines' => $this->rules()['product_lines']]);
+        $validator->after(function (Validator $validator): void {
+            $body = json_decode($this->getContent());
+
+            if (is_object($body) && property_exists($body, 'product_lines') && is_object($body->product_lines)) {
+                $validator->errors()->add('product_lines', 'The product lines field must be a list.');
+            }
+        });
+        $validator->validate();
     }
 
     /**
