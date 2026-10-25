@@ -22,8 +22,21 @@
             "ignore": [
                 "Modules\\Invoices\\Domain\\Models\\Invoice::findOrThrow"
             ]
+        },
+        // Equivalent: `list` already rejects anything that is not an array. The
+        // `array` rule is there for the API document only (Scramble documents
+        // the line cap as maxItems only on a known array type), and the drift
+        // test that notices its removal is excluded below (user decision, INV-7).
+        // ArrayItemRemoval removes the first item, so this matches one mutant.
+        "ArrayItemRemoval": {
+            "ignoreSourceCodeByRegex": [
+                "'product_lines' => \\['array', 'list', 'max:'\\.self::MAX_PRODUCT_LINES\\],"
+            ]
         }
     },
+    // The drift test fails on any change to the generated document, so it would
+    // kill every mutant of a form request or resource on its own (INV-7 probe).
+    "testFrameworkOptions": "--exclude-group=openapi-document",
     // Covered MSI only, by user decision: a mutant on a line no test runs
     // does not count, so untested code passes this gate.
     "minCoveredMsi": 100

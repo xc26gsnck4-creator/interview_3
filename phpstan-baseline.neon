@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Unused Modules\\Invoices\\Application\\Services\\FindInvoiceService\:\:handle \(all usages excluded by tests excluder\)$#'
-			identifier: shipmonk.deadMethod
-			count: 1
-			path: src/Modules/Invoices/Application/Services/FindInvoiceService.php
-
-		-
 			message: '#^Unused Modules\\Invoices\\Application\\Services\\SendInvoiceService\:\:handle \(all usages excluded by tests excluder\)$#'
 			identifier: shipmonk.deadMethod
 			count: 1

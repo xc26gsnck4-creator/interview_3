@@ -11,8 +11,8 @@ use Modules\Invoices\Domain\Models\Invoice;
 
 /**
  * Customer name and email arrive validated from the HTTP edge; the domain
- * owns the status and the line rules. A rejected line rolls back the whole
- * invoice.
+ * owns the status and the line rules. A rejected line, or lines whose total
+ * does not fit in int, roll back the whole invoice.
  */
 final readonly class CreateInvoiceService
 {
@@ -36,6 +36,7 @@ final readonly class CreateInvoiceService
                 ],
                 $data->productLines,
             ));
+            $invoice->ensureTotalFits();
 
             return $invoice->load('productLines');
         });
