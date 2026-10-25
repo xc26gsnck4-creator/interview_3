@@ -39,41 +39,15 @@ final class ClosedResponseObjectsExtension extends OperationExtension
         $visited = new SplObjectStorage;
 
         foreach ($operation->responses ?? [] as $response) {
-            $this->closeResponse($response, $visited);
-        }
-    }
+            $response = $response instanceof Reference ? $response->resolve() : $response;
 
-    /**
-     * @param  SplObjectStorage<object, null>  $visited
-     */
-    private function closeResponse(mixed $response, SplObjectStorage $visited): void
-    {
-        if ($response instanceof Reference) {
-            $response = $response->resolve();
-        }
+            if (! $response instanceof Response) {
+                continue;
+            }
 
-        if (! $response instanceof Response) {
-            return;
-        }
-
-        foreach ($response->content as $content) {
-            $this->closeContent($content, $visited);
-        }
-    }
-
-    /**
-     * @param  SplObjectStorage<object, null>  $visited
-     */
-    private function closeContent(mixed $content, SplObjectStorage $visited): void
-    {
-        if ($content instanceof MediaType) {
-            $content = $content->schema;
-        }
-
-        if ($content instanceof Schema) {
-            $this->closeType($content->type, $visited);
-        } elseif ($content instanceof Reference) {
-            $this->closeType($content, $visited);
+            foreach ($response->content as $content) {
+                $this->closeType($content instanceof MediaType ? $content->schema : $content, $visited);
+            }
         }
     }
 
@@ -82,13 +56,8 @@ final class ClosedResponseObjectsExtension extends OperationExtension
      */
     private function closeType(mixed $type, SplObjectStorage $visited): void
     {
-        if ($type instanceof Reference) {
-            $type = $type->resolve();
-        }
-
-        if ($type instanceof Schema) {
-            $type = $type->type;
-        }
+        $type = $type instanceof Reference ? $type->resolve() : $type;
+        $type = $type instanceof Schema ? $type->type : $type;
 
         if (! is_object($type) || $visited->offsetExists($type)) {
             return;
@@ -98,20 +67,14 @@ final class ClosedResponseObjectsExtension extends OperationExtension
 
         if ($type instanceof ArrayType) {
             $this->closeType($type->items, $visited);
+        } elseif ($type instanceof ObjectType) {
+            if ($type->properties !== [] && ! $type->additionalProperties instanceof Type) {
+                $type->additionalProperties(new NoAdditionalProperties);
+            }
 
-            return;
-        }
-
-        if (! $type instanceof ObjectType) {
-            return;
-        }
-
-        if ($type->properties !== [] && ! $type->additionalProperties instanceof Type) {
-            $type->additionalProperties(new NoAdditionalProperties);
-        }
-
-        foreach ($type->properties as $property) {
-            $this->closeType($property, $visited);
+            foreach ($type->properties as $property) {
+                $this->closeType($property, $visited);
+            }
         }
     }
 }

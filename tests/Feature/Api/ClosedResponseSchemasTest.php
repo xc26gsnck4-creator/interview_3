@@ -9,9 +9,10 @@ use ErrorException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\File;
 use Modules\Invoices\Domain\Models\Invoice;
 use PHPUnit\Framework\ExpectationFailedException;
-use Symfony\Component\HttpFoundation\Response;
 use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 use Throwable;
@@ -42,24 +43,15 @@ final class ClosedResponseSchemasTest extends TestCase
         $this->app->instance('add-extra-product-line-field', new class
         {
             /**
-             * @param  Closure(Request): Response  $next
+             * @param  Closure(Request): JsonResponse  $next
              */
-            public function handle(Request $request, Closure $next): Response
+            public function handle(Request $request, Closure $next): JsonResponse
             {
                 $response = $next($request);
+                $body = $response->getData(true);
+                data_set($body, 'data.product_lines.0.extra', 'undocumented');
 
-                if ($response instanceof JsonResponse) {
-                    $body = $response->getData(true);
-
-                    if (is_array($body) && is_array($body['data'] ?? null) && is_array($body['data']['product_lines'] ?? null)) {
-                        $lines = $body['data']['product_lines'];
-                        $lines[0] = [...(array) $lines[0], 'extra' => 'undocumented'];
-                        $body['data']['product_lines'] = $lines;
-                        $response->setData($body);
-                    }
-                }
-
-                return $response;
+                return $response->setData($body);
             }
         });
         $this->app->make(Router::class)->pushMiddlewareToGroup('api', 'add-extra-product-line-field');
@@ -77,82 +69,65 @@ final class ClosedResponseSchemasTest extends TestCase
 
     public function test_every_response_object_in_the_document_is_closed(): void
     {
-        /** @var array<string, mixed> $document */
-        $document = json_decode((string) file_get_contents(base_path('api.json')), true, flags: JSON_THROW_ON_ERROR);
+        $document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
         $openObjects = [];
         $visited = [];
 
-        foreach ($this->responseRoots($document) as $path => $schema) {
-            if (str_starts_with($path, '#/')) {
-                if (isset($visited[$path])) {
-                    continue;
-                }
-
-                $visited[$path] = true;
-            }
-
-            $this->walkSchema($document, $schema, $path, $openObjects, $visited);
+        foreach ($this->responseRoots($document) as $path => $response) {
+            $this->walkSchema($document, $response, $path, $openObjects, $visited);
         }
 
-        self::assertSame([], $openObjects, 'These response objects have properties but no additionalProperties.');
+        self::assertSame([], $openObjects, 'These response objects have properties but additionalProperties is not false.');
         self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $visited);
     }
 
     /**
-     * @param  array<string, mixed>  $document
+     * @param  array<array-key, mixed>  $document
      * @return array<string, mixed>
      */
     private function responseRoots(array $document): array
     {
         $roots = [];
 
-        foreach ($this->asArray($document['paths'] ?? null) as $uri => $operations) {
+        foreach ($this->asArray(Arr::get($document, 'paths')) as $uri => $operations) {
             foreach ($this->asArray($operations) as $method => $operation) {
-                foreach ($this->asArray($this->asArray($operation)['responses'] ?? null) as $status => $response) {
+                foreach ($this->asArray(Arr::get($this->asArray($operation), 'responses')) as $status => $response) {
                     $roots[sprintf('%s %s %s', $method, $uri, $status)] = $response;
                 }
             }
         }
 
-        foreach ($this->asArray($this->asArray($document['components'] ?? null)['responses'] ?? null) as $name => $response) {
-            $roots['#/components/responses/'.$name] = $response;
+        foreach (array_keys($this->asArray(Arr::get($document, 'components.responses'))) as $name) {
+            $roots['#/components/responses/'.$name] = ['$ref' => '#/components/responses/'.$name];
         }
 
         return $roots;
     }
 
     /**
-     * Follows `$ref`, `content.*.schema`, `properties` and `items`, each
-     * reference once.
+     * Follows `$ref` (each once), `content.*.schema`, `properties`, `items`,
+     * `allOf`, `anyOf`, `oneOf` and a schema-valued `additionalProperties`. An
+     * object with properties is open unless additionalProperties is false.
      *
-     * @param  array<string, mixed>  $document
-     * @param  list<string>|array<string, string>  $openObjects
+     * @param  array<array-key, mixed>  $document
+     * @param  list<string>  $openObjects
      * @param  array<string, true>  $visited
      */
     private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$visited): void
     {
         $node = $this->asArray($node);
+        $reference = $node['$ref'] ?? null;
 
-        if (isset($node['$ref']) && is_string($node['$ref'])) {
-            $reference = $node['$ref'];
-
-            if (isset($visited[$reference])) {
-                return;
+        if (is_string($reference)) {
+            if (! isset($visited[$reference])) {
+                $visited[$reference] = true;
+                $this->walkSchema($document, Arr::get($document, str_replace('/', '.', substr($reference, 2))), $reference, $openObjects, $visited);
             }
-
-            $visited[$reference] = true;
-            $target = $document;
-
-            foreach (explode('/', substr($reference, 2)) as $segment) {
-                $target = $this->asArray($target)[$segment] ?? null;
-            }
-
-            $this->walkSchema($document, $target, $reference, $openObjects, $visited);
 
             return;
         }
 
-        if (isset($node['properties']) && ! array_key_exists('additionalProperties', $node)) {
+        if (isset($node['properties']) && ($node['additionalProperties'] ?? null) !== false) {
             $openObjects[] = $path;
         }
 
@@ -164,8 +139,16 @@ final class ClosedResponseSchemasTest extends TestCase
             $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $visited);
         }
 
-        if (isset($node['items'])) {
-            $this->walkSchema($document, $node['items'], $path.'[]', $openObjects, $visited);
+        foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
+            foreach ($this->asArray($node[$keyword] ?? null) as $index => $branch) {
+                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $visited);
+            }
+        }
+
+        foreach (['items' => '[]', 'additionalProperties' => '.*'] as $keyword => $suffix) {
+            if (isset($node[$keyword])) {
+                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $visited);
+            }
         }
     }
 
