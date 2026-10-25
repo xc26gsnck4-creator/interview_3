@@ -7,12 +7,12 @@
     "require": {
         "php": "^8.5",
         "ext-filter": "*",
+        "ext-pdo": "*",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "ramsey/uuid": "^4.9"
     },
     "require-dev": {
-        "ext-pdo": "*",
         "dedoc/scramble": "^0.13.49",
         "deptrac/deptrac": "^4.7",
         "driftingly/rector-laravel": "^2.7",

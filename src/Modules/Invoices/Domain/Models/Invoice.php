@@ -171,8 +171,10 @@ final class Invoice extends Model
      * so syncing the original afterwards keeps a later save() on this instance
      * from tripping the updating hook. A lost claim takes over only the stored
      * status, leaving the instance's other attributes and relations alone. The
-     * re-read sees the current row: inside a transaction this connection already
-     * holds SQLite's write lock, outside one the update has already committed.
+     * re-read sees the current row: inside a transaction this connection holds
+     * SQLite's write lock by now, taken at BEGIN when transactions begin
+     * IMMEDIATE and by the zero-row update otherwise; outside one the update has
+     * already committed.
      * Both queries run on this instance's connection.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void

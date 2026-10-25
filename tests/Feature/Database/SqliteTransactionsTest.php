@@ -28,6 +28,8 @@ final class SqliteTransactionsTest extends TestCase
 
     private const string WAITER = 'sqlite_lock_waiter';
 
+    private const string READER = 'sqlite_lock_reader';
+
     private const int WAITER_BUSY_TIMEOUT_MS = 100;
 
     private string $databasePath;
@@ -35,6 +37,8 @@ final class SqliteTransactionsTest extends TestCase
     private ConnectionInterface $holder;
 
     private ConnectionInterface $waiter;
+
+    private ConnectionInterface $reader;
 
     protected function setUp(): void
     {
@@ -44,21 +48,29 @@ final class SqliteTransactionsTest extends TestCase
         self::assertIsString($path);
         $this->databasePath = $path;
 
-        $holder = [...Config::array('database.connections.sqlite'), 'database' => $path];
+        $holder = [...Config::array('database.connections.sqlite'), 'url' => null, 'database' => $path];
         $this->holder = DB::connectUsing(self::HOLDER, $holder);
 
-        $this->waiter = DB::connectUsing(self::WAITER, [...$holder, 'busy_timeout' => self::WAITER_BUSY_TIMEOUT_MS]);
+        $waiter = [...$holder, 'busy_timeout' => self::WAITER_BUSY_TIMEOUT_MS];
+        $this->waiter = DB::connectUsing(self::WAITER, $waiter);
+
+        $this->reader = DB::connectUsing(self::READER, [...$waiter, 'transaction_mode' => 'DEFERRED']);
     }
 
     /**
-     * Purging closes both connections, which rolls back a transaction the
-     * holder still has open, so the file can be deleted.
+     * Purging closes the connections, which rolls back a transaction one of
+     * them still has open, so the file can be deleted. The path is unset when
+     * setUp() failed before creating the file.
      */
     protected function tearDown(): void
     {
         DB::purge(self::HOLDER);
         DB::purge(self::WAITER);
-        File::delete($this->databasePath);
+        DB::purge(self::READER);
+
+        if (isset($this->databasePath)) {
+            File::delete($this->databasePath);
+        }
 
         parent::tearDown();
     }
@@ -93,5 +105,33 @@ final class SqliteTransactionsTest extends TestCase
         ));
 
         self::assertGreaterThanOrEqual(self::WAITER_BUSY_TIMEOUT_MS, $elapsedMs);
+    }
+
+    /**
+     * A reader holding SQLite's shared lock past the waiter's busy timeout
+     * makes the waiter's COMMIT fail, and SQLite then keeps that transaction
+     * open with the write lock. The reader begins DEFERRED so that it takes
+     * only the shared lock. Once it has finished, its own write gets the lock,
+     * and the waiter's insert is gone.
+     */
+    public function test_failed_commit_rolls_back_and_releases_the_write_lock(): void
+    {
+        Schema::connection(self::HOLDER)->create('locks', static function (Blueprint $table): void {
+            $table->id();
+        });
+        $this->reader->beginTransaction();
+        $this->reader->table('locks')->count();
+        $this->assertThrows(
+            fn () => $this->waiter->transaction(function (): void {
+                $this->waiter->table('locks')->insert(['id' => 1]);
+            }),
+            PDOException::class,
+            'database is locked',
+        );
+        $this->reader->commit();
+
+        $this->reader->table('locks')->insert(['id' => 2]);
+
+        self::assertSame([2], $this->reader->table('locks')->pluck('id')->all());
     }
 }
