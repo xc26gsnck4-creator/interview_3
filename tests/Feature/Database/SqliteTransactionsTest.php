@@ -152,6 +152,25 @@ final class SqliteTransactionsTest extends TestCase
     }
 
     /**
+     * With a second attempt the parent retries after the first failed commit,
+     * and each failed attempt is rolled back and reported as a rollback.
+     */
+    public function test_retried_commit_reports_a_rollback_for_each_failed_attempt(): void
+    {
+        $this->createLocksTable();
+        $rolledBack = [];
+        Event::listen(static function (TransactionRolledBack $event) use (&$rolledBack): void {
+            $rolledBack[] = $event->connectionName;
+        });
+
+        $this->failCommitWhileTheReaderHoldsItsLock(function (): void {
+            $this->waiter->table('locks')->insert(['id' => 1]);
+        }, attempts: 2);
+
+        self::assertSame([self::WAITER, self::WAITER], $rolledBack);
+    }
+
+    /**
      * Laravel's connection works without a transaction manager; then there is
      * nothing to forget, and the rollback still releases the lock.
      */
@@ -183,14 +202,14 @@ final class SqliteTransactionsTest extends TestCase
      *
      * @param  Closure(): void  $work
      */
-    private function failCommitWhileTheReaderHoldsItsLock(Closure $work): void
+    private function failCommitWhileTheReaderHoldsItsLock(Closure $work, int $attempts = 1): void
     {
         $this->reader->beginTransaction();
         $this->reader->table('locks')->count();
 
         $this->assertThrows(
-            function () use ($work): void {
-                $this->waiter->transaction($work);
+            function () use ($work, $attempts): void {
+                $this->waiter->transaction($work, $attempts);
             },
             PDOException::class,
             'database is locked',

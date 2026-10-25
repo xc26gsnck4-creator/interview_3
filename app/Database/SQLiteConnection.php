@@ -12,11 +12,14 @@ use Throwable;
  * SQLite keeps a transaction open when its COMMIT fails, for example with
  * "database is locked" while a reader holds its lock past the busy timeout.
  * For a transaction run through transaction(), Laravel rolls it back only
- * before a retry, so with a single attempt the connection would keep SQLite's
- * write lock and block every other writer until it is closed. Here it is
- * rolled back before the exception propagates, so its writes are discarded
- * and the lock is released, and on both paths the transaction manager forgets
- * the failed transaction, so its afterCommit callbacks never run. A caller of
+ * before a retry and fires no event for it, so with a single attempt the
+ * connection would keep SQLite's write lock and block every other writer until
+ * it is closed. Here every failed commit is rolled back first, with the
+ * rollingBack event, so its writes are discarded and the lock is released;
+ * then Laravel decides whether to retry, and the transaction manager forgets
+ * the failed transaction, so its afterCommit callbacks never run. A rollback
+ * that fails too is reported, the handle is closed, which also releases the
+ * lock, and the commit's exception propagates without a retry. A caller of
  * beginTransaction() and commit() keeps the transaction level after a failed
  * commit and rolls back itself.
  */
@@ -25,14 +28,40 @@ final class SQLiteConnection extends BaseSQLiteConnection
     #[Override]
     protected function handleCommitTransactionException(Throwable $e, mixed $currentAttempt, mixed $maxAttempts): void
     {
-        try {
-            parent::handleCommitTransactionException($e, $currentAttempt, $maxAttempts);
-        } catch (Throwable $throwable) {
-            $this->rollBackOpenTransaction();
+        $rolledBack = $this->rollBackOpenTransaction();
 
-            throw $throwable;
+        try {
+            if (! $rolledBack) {
+                $this->transactions = 0;
+
+                throw $e;
+            }
+
+            parent::handleCommitTransactionException($e, $currentAttempt, $maxAttempts);
         } finally {
             $this->forgetFailedTransaction();
+        }
+    }
+
+    /**
+     * Returns false when the rollback failed too and the handle was closed.
+     */
+    private function rollBackOpenTransaction(): bool
+    {
+        try {
+            $pdo = $this->getPdo();
+
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+                $this->fireConnectionEvent('rollingBack');
+            }
+
+            return true;
+        } catch (Throwable $throwable) {
+            report($throwable);
+            $this->disconnect();
+
+            return false;
         }
     }
 
@@ -46,24 +75,6 @@ final class SQLiteConnection extends BaseSQLiteConnection
 
         if ($name !== null) {
             $this->transactionsManager?->rollback($name, $this->transactions);
-        }
-    }
-
-    /**
-     * A rollback that fails too is reported, not thrown, so the commit's
-     * exception stays the one that propagates.
-     */
-    private function rollBackOpenTransaction(): void
-    {
-        try {
-            $pdo = $this->getPdo();
-
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-                $this->fireConnectionEvent('rollingBack');
-            }
-        } catch (Throwable $throwable) {
-            report($throwable);
         }
     }
 }
