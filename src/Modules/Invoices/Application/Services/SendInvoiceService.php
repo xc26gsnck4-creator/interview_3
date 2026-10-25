@@ -52,7 +52,6 @@ final readonly class SendInvoiceService
             return $this->connection->transaction(function () use ($invoiceId, &$notifiedInvoiceId): Invoice {
                 $invoice = Invoice::findOrThrow($invoiceId);
                 $invoice->markAsSending();
-                $invoice->load('productLines');
 
                 $total = $invoice->totalPriceOfLoadedLines();
 
