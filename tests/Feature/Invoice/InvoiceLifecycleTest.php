@@ -19,11 +19,12 @@ use Tests\TestCase;
 
 /**
  * The create, send, show and delivery-webhook endpoints used together through
- * the real routes, listener and event dispatch; only the notification facade is
- * a fake. After a send, the delivery reference comes from the notification the
- * fake recorded; the early delivery in the second test uses the invoice id, as
- * no notification exists yet. The status is read back through the show endpoint
- * after every step.
+ * the real routes, listener and event dispatch. The notification facade is a
+ * fake, the log is a spy and reported exceptions are captured, so the tests can
+ * assert what was notified, logged and reported. After a send, the delivery
+ * reference comes from the notification the fake recorded; the early delivery
+ * in the second test uses the invoice id, as no notification exists yet. The
+ * status is read back through the show endpoint after every step.
  */
 final class InvoiceLifecycleTest extends TestCase
 {
