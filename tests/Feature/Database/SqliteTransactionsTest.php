@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Database;
 
+use Closure;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\SQLiteBuilder;
 use Illuminate\Support\Benchmark;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
@@ -90,9 +93,7 @@ final class SqliteTransactionsTest extends TestCase
      */
     public function test_transaction_fails_at_begin_before_its_callback_runs_while_another_connection_writes(): void
     {
-        Schema::connection(self::HOLDER)->create('locks', static function (Blueprint $table): void {
-            $table->id();
-        });
+        $this->createLocksTable();
         $this->holder->beginTransaction();
         $this->holder->table('locks')->insert(['id' => 1]);
 
@@ -108,30 +109,93 @@ final class SqliteTransactionsTest extends TestCase
     }
 
     /**
-     * A reader holding SQLite's shared lock past the waiter's busy timeout
-     * makes the waiter's COMMIT fail, and SQLite then keeps that transaction
-     * open with the write lock. The reader begins DEFERRED so that it takes
-     * only the shared lock. Once it has finished, its own write gets the lock,
-     * and the waiter's insert is gone.
+     * Once the reader has finished, its own write gets the lock the waiter's
+     * failed commit held, and the waiter's insert is gone.
      */
     public function test_failed_commit_rolls_back_and_releases_the_write_lock(): void
     {
-        Schema::connection(self::HOLDER)->create('locks', static function (Blueprint $table): void {
-            $table->id();
+        $this->createLocksTable();
+        $rolledBack = [];
+        Event::listen(static function (TransactionRolledBack $event) use (&$rolledBack): void {
+            $rolledBack[] = $event->connectionName;
         });
-        $this->reader->beginTransaction();
-        $this->reader->table('locks')->count();
-        $this->assertThrows(
-            fn () => $this->waiter->transaction(function (): void {
-                $this->waiter->table('locks')->insert(['id' => 1]);
-            }),
-            PDOException::class,
-            'database is locked',
-        );
-        $this->reader->commit();
+        $this->failCommitWhileTheReaderHoldsItsLock(function (): void {
+            $this->waiter->table('locks')->insert(['id' => 1]);
+        });
 
         $this->reader->table('locks')->insert(['id' => 2]);
 
         self::assertSame([2], $this->reader->table('locks')->pluck('id')->all());
+        self::assertSame([self::WAITER], $rolledBack);
+    }
+
+    /**
+     * A callback registered for after the commit belongs to the transaction
+     * whose commit failed, so the next successful transaction must not run it.
+     */
+    public function test_failed_commit_drops_the_after_commit_callbacks_of_its_transaction(): void
+    {
+        $this->createLocksTable();
+        $afterCommitRan = false;
+        $this->failCommitWhileTheReaderHoldsItsLock(function () use (&$afterCommitRan): void {
+            DB::connection(self::WAITER)->afterCommit(static function () use (&$afterCommitRan): void {
+                $afterCommitRan = true;
+            });
+            $this->waiter->table('locks')->insert(['id' => 1]);
+        });
+
+        $this->waiter->transaction(function (): void {
+            $this->waiter->table('locks')->insert(['id' => 2]);
+        });
+
+        self::assertFalse($afterCommitRan);
+    }
+
+    /**
+     * Laravel's connection works without a transaction manager; then there is
+     * nothing to forget, and the rollback still releases the lock.
+     */
+    public function test_failed_commit_rolls_back_on_a_connection_without_a_transaction_manager(): void
+    {
+        $this->createLocksTable();
+        DB::connection(self::WAITER)->unsetTransactionManager();
+        $this->failCommitWhileTheReaderHoldsItsLock(function (): void {
+            $this->waiter->table('locks')->insert(['id' => 1]);
+        });
+
+        $this->reader->table('locks')->insert(['id' => 2]);
+
+        self::assertSame([2], $this->reader->table('locks')->pluck('id')->all());
+    }
+
+    private function createLocksTable(): void
+    {
+        Schema::connection(self::HOLDER)->create('locks', static function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    /**
+     * A reader holding SQLite's shared lock past the waiter's busy timeout
+     * makes the waiter's COMMIT fail, and SQLite then keeps that transaction
+     * open with the write lock. The reader begins DEFERRED so that it takes
+     * only the shared lock, and finishes once the commit has failed.
+     *
+     * @param  Closure(): void  $work
+     */
+    private function failCommitWhileTheReaderHoldsItsLock(Closure $work): void
+    {
+        $this->reader->beginTransaction();
+        $this->reader->table('locks')->count();
+
+        $this->assertThrows(
+            function () use ($work): void {
+                $this->waiter->transaction($work);
+            },
+            PDOException::class,
+            'database is locked',
+        );
+
+        $this->reader->commit();
     }
 }
