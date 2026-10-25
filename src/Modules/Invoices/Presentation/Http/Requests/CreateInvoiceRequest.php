@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Presentation\Http\Requests;
 
-use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
@@ -73,18 +73,18 @@ final class CreateInvoiceRequest extends FormRequest
      * the per-line rules over every submitted line before any rule runs, so
      * its own rules (a list of at most MAX_PRODUCT_LINES) run before the lines
      * are validated. JSON is decoded into PHP arrays, where `{}` and
-     * `{"0": ...}` pass as lists, so the raw body is decoded once more to
-     * reject an object.
+     * `{"0": ...}` pass as lists, so the raw body of a JSON request is decoded
+     * once more to reject an object, as the `list` rule would.
      */
     #[Override]
     protected function prepareForValidation(): void
     {
         $validator = validator($this->validationData(), ['product_lines' => $this->rules()['product_lines']]);
         $validator->after(function (Validator $validator): void {
-            $body = json_decode($this->getContent());
+            $body = $this->isJson() ? json_decode($this->getContent()) : null;
 
             if (is_object($body) && property_exists($body, 'product_lines') && is_object($body->product_lines)) {
-                $validator->errors()->add('product_lines', 'The product lines field must be a list.');
+                $validator->addFailure('product_lines', 'list');
             }
         });
         $validator->validate();

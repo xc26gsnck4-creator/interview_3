@@ -229,17 +229,28 @@ final class CreateInvoiceTest extends TestCase
     }
 
     /**
+     * @return Iterator<string, array{mixed}>
+     */
+    public static function productLinesOfABodyThatIsNotRead(): Iterator
+    {
+        yield 'an empty string' => [''];
+        yield 'an object' => [(object) []];
+    }
+
+    /**
      * Laravel trims strings and turns empty ones into null only in a request
      * marked as JSON; read without that, `""` for product_lines slipped past
-     * the array rules and "  Jane  " was stored untrimmed.
+     * the array rules and "  Jane  " was stored untrimmed. Nor does the check
+     * of product_lines' shape read such a body.
      */
-    public function test_does_not_read_a_body_without_a_json_content_type(): void
+    #[DataProvider('productLinesOfABodyThatIsNotRead')]
+    public function test_does_not_read_a_body_without_a_json_content_type(mixed $productLines): void
     {
         $response = $this->call(
             'POST',
             route('invoices.store'),
             server: ['CONTENT_TYPE' => 'text/plain', 'HTTP_ACCEPT' => 'application/json'],
-            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ', 'product_lines' => '']),
+            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ', 'product_lines' => $productLines]),
         );
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
