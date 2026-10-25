@@ -37,7 +37,8 @@ final class InvoiceServiceProvider extends ServiceProvider
      * Domain exceptions know nothing about HTTP, and bootstrap/app.php knows
      * nothing about invoices, so the module maps them here. Artisan commands
      * run with Collision's console handler, which renders no HTTP responses, so
-     * only the framework's own handler gets the mappings.
+     * only the framework's own handler gets the mappings. The mapped exceptions
+     * are client errors (4xx), so they are not reported either.
      *
      * An overflowing total reaches HTTP when an invoice is created, where it is
      * a fault in the submitted lines: it answers the same validation error as
@@ -46,6 +47,7 @@ final class InvoiceServiceProvider extends ServiceProvider
      */
     private static function renderDomainExceptions(Handler $handler): void
     {
+        $handler->dontReport(array_keys(ExceptionHttpStatuses::STATUSES));
         $handler->renderable(static function (DomainException $exception): ?JsonResponse {
             $status = ExceptionHttpStatuses::STATUSES[$exception::class] ?? null;
 

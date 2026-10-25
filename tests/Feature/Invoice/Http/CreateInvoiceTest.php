@@ -81,29 +81,33 @@ final class CreateInvoiceTest extends TestCase
         $this->assertCreatedWithoutLines($response);
     }
 
-    public function test_accepts_minimum_line_amounts(): void
+    /**
+     * @return Iterator<string, array{int, int, int}>
+     */
+    public static function lineAmountsAtTheBounds(): Iterator
     {
-        $response = $this->postJson(route('invoices.store'), self::withLine(['name' => 'Sticker', 'quantity' => 1, 'unit_price' => 1]));
+        yield 'minimum' => [1, 1, 1];
+        yield 'maximum' => [2147483647, 2147483647, 4611686014132420609];
+    }
+
+    #[DataProvider('lineAmountsAtTheBounds')]
+    public function test_accepts_line_amounts_at_the_bounds(int $quantity, int $unitPrice, int $total): void
+    {
+        $response = $this->postJson(route('invoices.store'), self::withLine(['name' => 'Bulk', 'quantity' => $quantity, 'unit_price' => $unitPrice]));
 
         $response->assertCreated()
-            ->assertJsonPath('data.product_lines.0.total_unit_price', 1)
-            ->assertJsonPath('data.total_price', 1);
-        $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Sticker', 'quantity' => 1, 'unit_price' => 1]);
+            ->assertJsonPath('data.product_lines.0.total_unit_price', $total)
+            ->assertJsonPath('data.total_price', $total);
+        $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Bulk', 'quantity' => $quantity, 'unit_price' => $unitPrice]);
         $this->assertMatchesContract($response, 201);
     }
 
-    public function test_accepts_maximum_line_amounts(): void
+    public function test_accepts_the_maximum_of_1000_lines(): void
     {
-        $response = $this->postJson(route('invoices.store'), self::withLine([
-            'name' => 'Bulk',
-            'quantity' => 2147483647,
-            'unit_price' => 2147483647,
-        ]));
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => array_fill(0, 1000, self::LINE)]);
 
-        $response->assertCreated()
-            ->assertJsonPath('data.product_lines.0.total_unit_price', 4611686014132420609)
-            ->assertJsonPath('data.total_price', 4611686014132420609);
-        $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Bulk', 'quantity' => 2147483647, 'unit_price' => 2147483647]);
+        $response->assertCreated()->assertJsonCount(1000, 'data.product_lines');
+        $this->assertDatabaseCount('invoice_product_lines', 1000);
         $this->assertMatchesContract($response, 201);
     }
 
@@ -128,10 +132,11 @@ final class CreateInvoiceTest extends TestCase
         yield 'customer email of 256 characters' => [[...self::PAYLOAD, 'customer_email' => self::validEmailOf256Characters()], 'customer_email'];
         yield 'product lines as a string' => [[...self::PAYLOAD, 'product_lines' => 'x'], 'product_lines'];
         yield 'product lines as an object' => [[...self::PAYLOAD, 'product_lines' => ['first' => self::LINE]], 'product_lines'];
+        yield '1001 product lines' => [[...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, self::LINE)], 'product_lines'];
         yield 'empty line name' => [self::withLine([...self::LINE, 'name' => '']), 'product_lines.0.name'];
         yield 'blank line name' => [self::withLine([...self::LINE, 'name' => '   ']), 'product_lines.0.name'];
         yield 'line name of 256 characters' => [self::withLine([...self::LINE, 'name' => str_repeat('n', 256)]), 'product_lines.0.name'];
-        yield 'line that is not an object' => [[...self::PAYLOAD, 'product_lines' => ['Consulting']], 'product_lines.0'];
+        yield 'line that is not an object' => [[...self::PAYLOAD, 'product_lines' => ['Consulting']], 'product_lines.0.name'];
         yield 'line without name' => [self::withLine(Arr::except(self::LINE, ['name'])), 'product_lines.0.name'];
         yield 'line without quantity' => [self::withLine(Arr::except(self::LINE, ['quantity'])), 'product_lines.0.quantity'];
         yield 'line without unit price' => [self::withLine(Arr::except(self::LINE, ['unit_price'])), 'product_lines.0.unit_price'];

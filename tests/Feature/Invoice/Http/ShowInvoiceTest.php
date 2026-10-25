@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Invoice\Http;
 
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Str;
 use Illuminate\Testing\Fluent\AssertableJson;
+use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Tests\Concerns\ValidatesOpenApiContract;
@@ -36,19 +38,10 @@ final class ShowInvoiceTest extends TestCase
                 ->where('status', 'sending')
                 ->where('customer_name', 'Jane Doe')
                 ->where('customer_email', 'jane@example.com')
-                ->has('product_lines', 2)
-                ->has('product_lines.0', static fn (AssertableJson $line): AssertableJson => $line
-                    ->where('id', $consulting->id)
-                    ->where('name', 'Consulting')
-                    ->where('quantity', 2)
-                    ->where('unit_price', 15000)
-                    ->where('total_unit_price', 30000))
-                ->has('product_lines.1', static fn (AssertableJson $line): AssertableJson => $line
-                    ->where('id', $hosting->id)
-                    ->where('name', 'Hosting')
-                    ->where('quantity', 3)
-                    ->where('unit_price', 100)
-                    ->where('total_unit_price', 300))
+                ->where('product_lines', [
+                    ['id' => $consulting->id, 'name' => 'Consulting', 'quantity' => 2, 'unit_price' => 15000, 'total_unit_price' => 30000],
+                    ['id' => $hosting->id, 'name' => 'Hosting', 'quantity' => 3, 'unit_price' => 100, 'total_unit_price' => 300],
+                ])
                 ->where('total_price', 30300)));
         $this->assertMatchesContract($response, 200);
     }
@@ -66,13 +59,18 @@ final class ShowInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 200);
     }
 
+    /**
+     * A client error, so it is not reported (logged with its trace).
+     */
     public function test_returns_404_for_unknown_invoice(): void
     {
+        $exceptions = Exceptions::fake();
         $unknownId = (string) Str::uuid7();
 
         $response = $this->getJson(route('invoices.show', $unknownId));
 
         $response->assertNotFound()->assertExactJson(['message' => sprintf('Invoice %s was not found.', $unknownId)]);
+        $exceptions->assertNotReported(InvoiceNotFound::class);
         $this->assertMatchesContract($response, 404);
     }
 

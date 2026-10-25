@@ -8,14 +8,14 @@ use Illuminate\Http\JsonResponse;
 use Modules\Invoices\Application\Services\CreateInvoiceService;
 use Modules\Invoices\Application\Services\FindInvoiceService;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
-use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Presentation\Http\Requests\CreateInvoiceRequest;
 use Modules\Invoices\Presentation\Http\Resources\InvoiceResource;
 
 /**
  * Each action calls one application service. Domain exceptions are mapped to
- * HTTP by InvoiceServiceProvider; the @throws tags name the ones each action
- * answers with, for the API document.
+ * HTTP by InvoiceServiceProvider; an action's @throws tags name the mapped
+ * ones it answers with, for the API document (store's 422s come from its form
+ * request).
  */
 final readonly class InvoiceController
 {
@@ -24,9 +24,6 @@ final readonly class InvoiceController
         private FindInvoiceService $findInvoice,
     ) {}
 
-    /**
-     * @throws InvoiceTotalOverflow
-     */
     public function store(CreateInvoiceRequest $request): JsonResponse
     {
         return new InvoiceResource($this->createInvoice->handle($request->toData()))

@@ -25,7 +25,7 @@ final class InvoiceResource extends JsonResource
     {
         return [
             'id' => $this->resource->id,
-            'status' => $this->resource->status->value,
+            'status' => $this->resource->status,
             'customer_name' => $this->resource->customer_name,
             'customer_email' => $this->resource->customer_email,
             'product_lines' => InvoiceProductLineResource::collection($this->resource->productLines),

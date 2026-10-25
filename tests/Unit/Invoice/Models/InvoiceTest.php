@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Invoice\Models;
 
+use Closure;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Iterator;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class InvoiceTest extends TestCase
@@ -120,7 +123,22 @@ final class InvoiceTest extends TestCase
         $this->assertDatabaseCount('invoices', 0);
     }
 
-    public function test_total_price_throws_when_the_sum_overflows(): void
+    /**
+     * @return Iterator<string, array{Closure(Invoice): mixed}>
+     */
+    public static function totalComputations(): Iterator
+    {
+        yield 'totalPrice' => [static fn (Invoice $invoice): int => $invoice->totalPrice()];
+        yield 'ensureTotalFits' => [static function (Invoice $invoice): void {
+            $invoice->ensureTotalFits();
+        }];
+    }
+
+    /**
+     * @param  Closure(Invoice): mixed  $computeTotal
+     */
+    #[DataProvider('totalComputations')]
+    public function test_total_computation_throws_when_the_sum_overflows(Closure $computeTotal): void
     {
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->count(3)->for($invoice)->create([
@@ -129,7 +147,7 @@ final class InvoiceTest extends TestCase
         ]);
 
         $this->assertThrows(
-            fn () => $invoice->totalPrice(),
+            fn (): mixed => $computeTotal($invoice),
             InvoiceTotalOverflow::class,
             sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
         );
@@ -150,21 +168,6 @@ final class InvoiceTest extends TestCase
         )->create();
 
         self::assertSame(PHP_INT_MAX, $invoice->totalPrice());
-    }
-
-    public function test_ensure_total_fits_throws_when_the_sum_overflows(): void
-    {
-        $invoice = Invoice::factory()->create();
-        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
-        ]);
-
-        $this->assertThrows(
-            fn () => $invoice->ensureTotalFits(),
-            InvoiceTotalOverflow::class,
-            sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
-        );
     }
 
     public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
