@@ -6,6 +6,7 @@ namespace Modules\Invoices\Application\Services;
 
 use Illuminate\Database\ConnectionInterface;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
+use Modules\Invoices\Application\Exceptions\SendNotRecorded;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Notifications\Api\Data\NotifyData;
 use Modules\Notifications\Api\NotificationFacadeInterface;
@@ -31,6 +32,12 @@ use Throwable;
  * commit can undo the claim. Either way the invoice stays draft after the
  * customer was notified, and a retry notifies them again. Callers must not
  * wrap handle() in a transaction of their own, which would defer that commit.
+ * After notify() only the commit is left (the application registers no
+ * afterCommit callbacks or committed listeners), so a failure then means the
+ * customer was notified and the invoice stayed draft: it becomes
+ * SendNotRecorded. A failure before it (a lock error at BEGIN, a rule,
+ * NotificationFailed) passes through unchanged, so a lock 503 always means
+ * nothing happened.
  * The total is in minor units and is shown with two decimals, computed on ints.
  */
 final readonly class SendInvoiceService
@@ -42,27 +49,39 @@ final readonly class SendInvoiceService
 
     public function handle(string $invoiceId): Invoice
     {
-        return $this->connection->transaction(function () use ($invoiceId): Invoice {
-            $invoice = Invoice::findOrThrow($invoiceId);
-            $invoice->markAsSending();
-            $invoice->load('productLines');
+        $notifiedInvoiceId = null;
 
-            $total = $invoice->totalPrice();
+        try {
+            return $this->connection->transaction(function () use ($invoiceId, &$notifiedInvoiceId): Invoice {
+                $invoice = Invoice::findOrThrow($invoiceId);
+                $invoice->markAsSending();
+                $invoice->load('productLines');
 
-            $data = new NotifyData(
-                resourceId: Uuid::fromString($invoice->id),
-                toEmail: $invoice->customer_email,
-                subject: sprintf('Invoice %s', $invoice->id),
-                message: sprintf('Your invoice %s for a total of %d.%02d is ready.', $invoice->id, intdiv($total, 100), $total % 100),
-            );
+                $total = $invoice->totalPrice();
 
-            try {
-                $this->notifications->notify($data);
-            } catch (Throwable $throwable) {
-                throw NotificationFailed::forInvoice($invoice->id, $throwable);
+                $data = new NotifyData(
+                    resourceId: Uuid::fromString($invoice->id),
+                    toEmail: $invoice->customer_email,
+                    subject: sprintf('Invoice %s', $invoice->id),
+                    message: sprintf('Your invoice %s for a total of %d.%02d is ready.', $invoice->id, intdiv($total, 100), $total % 100),
+                );
+
+                try {
+                    $this->notifications->notify($data);
+                } catch (Throwable $throwable) {
+                    throw NotificationFailed::forInvoice($invoice->id, $throwable);
+                }
+
+                $notifiedInvoiceId = $invoice->id;
+
+                return $invoice;
+            });
+        } catch (Throwable $throwable) {
+            if ($notifiedInvoiceId === null) {
+                throw $throwable;
             }
 
-            return $invoice;
-        });
+            throw SendNotRecorded::forInvoice($notifiedInvoiceId, $throwable);
+        }
     }
 }
