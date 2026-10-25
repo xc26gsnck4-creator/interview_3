@@ -54,7 +54,7 @@ final readonly class SendInvoiceService
                 $invoice->markAsSending();
                 $invoice->load('productLines');
 
-                $total = $invoice->totalPrice();
+                $total = $invoice->totalPriceOfLoadedLines();
 
                 $data = new NotifyData(
                     resourceId: Uuid::fromString($invoice->id),

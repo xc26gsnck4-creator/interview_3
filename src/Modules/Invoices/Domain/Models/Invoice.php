@@ -76,6 +76,17 @@ final class Invoice extends Model
     }
 
     /**
+     * Summed from the loaded `productLines` relation (Eloquent loads it when it
+     * is not loaded yet). A response renders the total from the same lines it
+     * lists and runs no query after a write's commit; totalPrice() keeps
+     * reading the stored lines fresh.
+     */
+    public function totalPriceOfLoadedLines(): int
+    {
+        return $this->sumLineTotals($this->productLines);
+    }
+
+    /**
      * Each line total fits in int, but the sum of several may not; an invoice
      * whose total cannot be computed could never be shown or sent.
      */

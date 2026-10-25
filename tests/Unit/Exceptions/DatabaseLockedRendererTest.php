@@ -15,8 +15,6 @@ use Tests\TestCase;
 
 final class DatabaseLockedRendererTest extends TestCase
 {
-    private const string LOCK_ERROR = 'SQLSTATE[HY000]: General error: 5 database is locked';
-
     /**
      * A lock error at BEGIN is a raw PDOException; a query that fails on the
      * lock is a QueryException, which is a PDOException too.
@@ -36,26 +34,50 @@ final class DatabaseLockedRendererTest extends TestCase
      */
     public static function lockErrors(): Iterator
     {
-        $lockError = new PDOException(self::LOCK_ERROR);
+        $busy = self::pdoExceptionWith(['HY000', 5, 'database is locked']);
 
-        yield 'pdo exception' => [$lockError];
-        yield 'query exception' => [new QueryException('sqlite', 'insert into "invoices" ("id") values (?)', ['1'], $lockError)];
+        yield 'busy' => [$busy];
+        yield 'locked' => [self::pdoExceptionWith(['HY000', 6, 'database table is locked'])];
+        yield 'query exception' => [new QueryException('sqlite', 'insert into "invoices" ("id") values (?)', ['1'], $busy)];
     }
 
-    public function test_ignores_other_database_errors(): void
+    /**
+     * @return Iterator<string, array{PDOException}>
+     */
+    public static function otherErrors(): Iterator
     {
-        $response = (new DatabaseLockedRenderer)(
-            new PDOException('SQLSTATE[23000]: Integrity constraint violation'),
-            Request::create('/api/invoices', 'POST'),
-        );
+        yield 'client text in the bindings' => [new QueryException(
+            'sqlite',
+            'insert into "invoices" ("customer_name") values (?)',
+            ['database is locked'],
+            self::pdoExceptionWith(['HY000', 8, 'attempt to write a readonly database']),
+        )];
+        yield 'no error info' => [new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')];
+    }
+
+    #[DataProvider('otherErrors')]
+    public function test_ignores_other_database_errors(PDOException $exception): void
+    {
+        $response = (new DatabaseLockedRenderer)($exception, Request::create('/api/invoices', 'POST'));
 
         self::assertNull($response);
     }
 
     public function test_ignores_lock_errors_outside_the_api(): void
     {
-        $response = (new DatabaseLockedRenderer)(new PDOException(self::LOCK_ERROR), Request::create('/'));
+        $response = (new DatabaseLockedRenderer)(self::pdoExceptionWith(['HY000', 5, 'database is locked']), Request::create('/'));
 
         self::assertNull($response);
+    }
+
+    /**
+     * @param  array{string, int, string}  $errorInfo
+     */
+    private static function pdoExceptionWith(array $errorInfo): PDOException
+    {
+        $exception = new PDOException($errorInfo[2]);
+        $exception->errorInfo = $errorInfo;
+
+        return $exception;
     }
 }

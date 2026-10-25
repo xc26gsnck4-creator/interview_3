@@ -10,8 +10,8 @@ use Modules\Invoices\Domain\Models\Invoice;
 use Override;
 
 /**
- * The services load the lines; the total is computed from the stored lines on
- * every render.
+ * The services load the lines, and the total is computed from those loaded
+ * lines, so it matches `product_lines` and nothing is read after a commit.
  *
  * @property-read Invoice $resource
  */
@@ -29,7 +29,7 @@ final class InvoiceResource extends JsonResource
             'customer_name' => $this->resource->customer_name,
             'customer_email' => $this->resource->customer_email,
             'product_lines' => InvoiceProductLineResource::collection($this->resource->productLines),
-            'total_price' => $this->resource->totalPrice(),
+            'total_price' => $this->resource->totalPriceOfLoadedLines(),
         ];
     }
 }
