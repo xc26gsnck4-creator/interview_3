@@ -29,7 +29,7 @@ Layer names mirror the Notifications module. There is no `Api/` folder because n
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
-Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let only Application and Infrastructure reach Notifications, through its `Api`, keep Notifications from depending on Invoices, let only the Domain name the factories, and keep `app/` (not drawn) apart from the modules. Not checked: the arrows inside the Notifications module, the factories' own arrows, and `routes.php`, which is not a class. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
+Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let only Application and Infrastructure reach Notifications, through its `Api`, keep Notifications from depending on Invoices, let only the Domain name the factories, and keep `app/` (not drawn) apart from the modules and the factories. Not checked: the arrows inside the Notifications module, the factories' arrows into the modules, and `routes.php`, which is not a class. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
 
 ```mermaid
 flowchart TD;
@@ -68,7 +68,7 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 - **Lifecycle** (`InvoiceLifecycleTest`): three end-to-end stories through the real routes, with only the facade faked (the log is a spy and reported exceptions are captured, so the tests can assert on them): the happy path delivered with the reference taken from the recorded notification, a delivery before the send, and a retry after a failed notification. Each step is read back through show.
 - **Real locks** (`SqliteTransactionsTest`, `DatabaseLockedTest`): separate connections on a temporary file prove that `IMMEDIATE` waits at `BEGIN` and that a failed commit is rolled back and releases the lock. Over HTTP they produce the busy 503 with nothing written, and the not-recorded 500 behind a reader.
 - **API document:** `OpenApiDocumentTest` fails when `api.json` differs from what Scramble generates from the code, or when Scramble meets a type it cannot document.
-- **Architecture:** phpat rules, static and run by PHPStan: classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP, and the layer and module map above.
+- **Architecture:** phpat rules, static and run by PHPStan: classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP, and the checked part of the layer and module map above.
 
 ## Failure behaviour
 
@@ -128,7 +128,7 @@ Set up with `./start.sh` as the README says. The commands run through Laravel Sa
 | Command | What it checks | Note |
 |---|---|---|
 | `vendor/bin/sail artisan test` | the test suite | in-memory SQLite; never touches `database/database.sqlite` |
-| `vendor/bin/sail bin pint --test` | code style (Laravel preset) | |
+| `vendor/bin/sail bin pint --test` | code style: the Laravel preset plus `declare(strict_types=1)` in every file (`pint.json`) | |
 | `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. There is no baseline; the one ignore in `phpstan.neon` is structural and commented |
 | `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
 

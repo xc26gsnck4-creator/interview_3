@@ -12,11 +12,13 @@ use PHPat\Test\PHPat;
 /**
  * Structural rules and the layer and module map of the Invoices module, run by
  * PHPStan through phpat (a `phpat.test` service in phpstan.neon), not by
- * PHPUnit. Presentation and Infrastructure depend on Application, Application
- * on Domain, and Application and Infrastructure reach Notifications only
- * through its Api. The Notifications module is the task's own code: its
- * internal layers stay unchecked. routes.php is not a class, so phpat does not
- * see it.
+ * PHPUnit. The map rules forbid edges rather than list the allowed ones: no
+ * inner layer reaches Infrastructure or Presentation, only Application and
+ * Infrastructure reach Notifications (through its Api), Notifications does not
+ * reach Invoices, only the Domain names the factories, and app/ stays apart
+ * from the modules and the factories. Unchecked: the edges inside
+ * Notifications (the task's own code), the factories' edges into the modules,
+ * and routes.php, which is not a class.
  */
 final class InvoicesArchitectureRules
 {
