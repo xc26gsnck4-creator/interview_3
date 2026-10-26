@@ -13,8 +13,9 @@ use PHPat\Test\PHPat;
  * Structural rules and the layer and module map of the Invoices module, run by
  * PHPStan through phpat (a `phpat.test` service in phpstan.neon), not by
  * PHPUnit. Presentation and Infrastructure depend on Application, Application
- * on Domain, and Invoices reaches Notifications only through its Api. The
- * Notifications module is the task's own code: its layers stay unchecked.
+ * on Domain, and Application and Infrastructure reach Notifications only
+ * through its Api. The Notifications module is the task's own code: its layers
+ * stay unchecked.
  */
 final class InvoicesArchitectureRules
 {
@@ -45,6 +46,14 @@ final class InvoicesArchitectureRules
             ->because('Api is the contract the Notifications module offers');
     }
 
+    public function test_presentation_does_not_depend_on_notifications(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules\Invoices\Presentation'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Notifications'))
+            ->because('the controller notifies through the send service, never directly');
+    }
+
     public function test_modules_do_not_depend_on_app(): BuildStep
     {
         return PHPat::rule()
@@ -57,7 +66,7 @@ final class InvoicesArchitectureRules
     {
         return PHPat::rule()
             ->classes(Selector::inNamespace('App'))
-            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules'), Selector::inNamespace('Database\Factories'))
             ->because('app/ holds framework glue that names no module');
     }
 
