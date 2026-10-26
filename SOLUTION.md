@@ -56,7 +56,7 @@ flowchart TD;
 7. **Transactions begin `IMMEDIATE` with a 5 s busy timeout.** The write lock is taken at `BEGIN`, so a concurrent send waits, then reads `sending` and gets a clean 409. `SQLiteConnection` rolls back a transaction whose `COMMIT` failed (SQLite keeps it open), which releases the lock. Why: under SQLite's default `DEFERRED` mode, a transaction that read before it wrote failed at once with "database is locked", because SQLite does not wait to upgrade a read lock. Instead of: `DEFERRED` transactions. ([#13])
 8. **A failure after the notification is its own 500.** Once `notify()` has returned, only the commit is left. If the commit fails, `SendNotRecorded` answers a reported 500 that says the customer was notified, the invoice remains in draft and sending it again notifies them again. Why: the retryable 503 must only ever mean that nothing happened. Instead of: a warning in the documentation next to a 503. ([#16])
 9. **A database lock answers 503 on every `/api` route.** `DatabaseLockedRenderer` recognises SQLite's result codes 5 and 6 (busy, locked), never the message, because a query error's message contains the client's own input. Why: a request that waits past the timeout fails at `BEGIN`, before it writes anything; a commit that fails on the lock is rolled back (decision 7; for a send, decision 8 applies); and responses are rendered from data already loaded, so nothing is read after a commit. The 503 is therefore safe to retry. Instead of: a reported 500, or a 503 on send only. ([#16])
-10. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. The rest is Laravel's own rules: text limits apply after its trimming middleware, and `product_lines` may be absent, `null` or `[]`. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15], [#22])
+10. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15])
 
 ## Testing strategy
 
@@ -75,10 +75,9 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
 | **Create** `POST /api/invoices` | | | |
-| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` not a list | 422 | nothing stored | [`CreateInvoiceTest`] |
+| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` not a list, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
 | No `product_lines`, `null` or `[]` (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
 | A form body, a body not marked as JSON, malformed JSON | 422 | nothing stored | [`CreateInvoiceTest`] |
-| More than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
 | Lines whose total overflows PHP's int | 422 on `product_lines` | nothing stored | [`CreateInvoiceTest`] |
 | **Show** `GET /api/invoices/{id}` | | | |
 | Unknown id | 404 | – | [`ShowInvoiceTest`] |
@@ -119,7 +118,7 @@ Decision 5 was confirmed knowing these consequences:
 - Totals are integers in minor units up to 2^63−1, so a client must parse integers above 2^53 exactly. JavaScript's `JSON.parse` rounds them; use a BigInt-aware parser.
 - Quiet saves (`saveQuietly()`, `createQuietly()`) and query-builder writes bypass the model rules, and the schema is fixed by the task, so there is no CHECK constraint behind them. The send rule re-checks the stored line amounts, so an invalid line written that way cannot be sent.
 - Product lines stay editable through the model after the invoice leaves draft. No endpoint edits them, but nothing freezes them either.
-- The create rules see the body as Laravel decodes and trims it. `api.json`'s `maxLength: 255` applies to the trimmed text, so a 255-character name after a tab is accepted and stored trimmed, and a JSON object keyed `"0"`, `"1"`, … for `product_lines` is read as a list.
+- Laravel decodes JSON objects into PHP arrays and trims strings before the create rules run. For `product_lines`, `{}` reads as `[]` and an object keyed `"0"`, `"1"`, … as a list. `api.json`'s `maxLength: 255` applies to the trimmed text, so a 255-character name after a tab is accepted and stored trimmed.
 
 ## Running the checks
 
@@ -187,7 +186,6 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [#14]: https://github.com/xc26gsnck4-creator/interview_3/pull/14
 [#15]: https://github.com/xc26gsnck4-creator/interview_3/pull/15
 [#16]: https://github.com/xc26gsnck4-creator/interview_3/pull/16
-[#22]: https://github.com/xc26gsnck4-creator/interview_3/pull/22
 [`CreateInvoiceTest`]: tests/Feature/Invoice/Http/CreateInvoiceTest.php
 [`ShowInvoiceTest`]: tests/Feature/Invoice/Http/ShowInvoiceTest.php
 [`SendInvoiceTest`]: tests/Feature/Invoice/Http/SendInvoiceTest.php

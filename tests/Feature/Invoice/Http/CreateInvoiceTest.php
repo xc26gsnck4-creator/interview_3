@@ -10,10 +10,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\Fluent\AssertableJson;
-use Illuminate\Testing\TestResponse;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 final class CreateInvoiceTest extends TestCase
@@ -80,25 +78,29 @@ final class CreateInvoiceTest extends TestCase
         self::assertSame([], $queriesAfterCommit);
     }
 
-    public function test_creates_invoice_with_empty_lines_array(): void
+    /**
+     * @return Iterator<string, array{array<mixed>}>
+     */
+    public static function payloadsWithoutLines(): Iterator
     {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => []]);
-
-        $this->assertCreatedWithoutLines($response);
+        yield 'lines key absent' => [Arr::except(self::PAYLOAD, ['product_lines'])];
+        yield 'null lines' => [[...self::PAYLOAD, 'product_lines' => null]];
+        yield 'empty lines array' => [[...self::PAYLOAD, 'product_lines' => []]];
     }
 
-    public function test_creates_invoice_when_lines_key_is_absent(): void
+    /**
+     * @param  array<mixed>  $payload
+     */
+    #[DataProvider('payloadsWithoutLines')]
+    public function test_creates_invoice_without_lines(array $payload): void
     {
-        $response = $this->postJson(route('invoices.store'), Arr::except(self::PAYLOAD, ['product_lines']));
+        $response = $this->postJson(route('invoices.store'), $payload);
 
-        $this->assertCreatedWithoutLines($response);
-    }
-
-    public function test_creates_invoice_when_lines_are_null(): void
-    {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => null]);
-
-        $this->assertCreatedWithoutLines($response);
+        $response->assertCreated()
+            ->assertJsonPath('data.product_lines', [])
+            ->assertJsonPath('data.total_price', 0);
+        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
+        $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
     /**
@@ -283,27 +285,16 @@ final class CreateInvoiceTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{mixed}>
+     * Laravel trims strings only in a request marked as JSON; read without
+     * that, "  Jane  " was stored untrimmed.
      */
-    public static function productLinesOfABodyThatIsNotRead(): Iterator
-    {
-        yield 'an empty string' => [''];
-        yield 'an object' => [(object) []];
-    }
-
-    /**
-     * Laravel trims strings and turns empty ones into null only in a request
-     * marked as JSON; read without that, `""` for product_lines slipped past
-     * the array rules and "  Jane  " was stored untrimmed.
-     */
-    #[DataProvider('productLinesOfABodyThatIsNotRead')]
-    public function test_does_not_read_a_body_without_a_json_content_type(mixed $productLines): void
+    public function test_does_not_read_a_body_without_a_json_content_type(): void
     {
         $response = $this->call(
             'POST',
             route('invoices.store'),
             server: ['CONTENT_TYPE' => 'text/plain', 'HTTP_ACCEPT' => 'application/json'],
-            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ', 'product_lines' => $productLines]),
+            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ']),
         );
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
@@ -354,17 +345,5 @@ final class CreateInvoiceTest extends TestCase
     private static function validEmailOfLength(int $length): string
     {
         return str_repeat('a', $length - 248).'@'.implode('.', array_fill(0, 4, str_repeat('b', 60))).'.com';
-    }
-
-    /**
-     * @param  TestResponse<Response>  $response
-     */
-    private function assertCreatedWithoutLines(TestResponse $response): void
-    {
-        $response->assertCreated()
-            ->assertJsonPath('data.product_lines', [])
-            ->assertJsonPath('data.total_price', 0);
-        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
-        $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 }
