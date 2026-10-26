@@ -14,8 +14,9 @@ use PHPat\Test\PHPat;
  * PHPStan through phpat (a `phpat.test` service in phpstan.neon), not by
  * PHPUnit. Presentation and Infrastructure depend on Application, Application
  * on Domain, and Application and Infrastructure reach Notifications only
- * through its Api. The Notifications module is the task's own code: its layers
- * stay unchecked.
+ * through its Api. The Notifications module is the task's own code: its
+ * internal layers stay unchecked. routes.php is not a class, so phpat does not
+ * see it.
  */
 final class InvoicesArchitectureRules
 {
@@ -41,6 +42,7 @@ final class InvoicesArchitectureRules
     {
         return PHPat::rule()
             ->classes(Selector::inNamespace('Modules\Invoices'))
+            ->excluding(Selector::inNamespace('Modules\Invoices\Presentation'))
             ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Notifications'))
             ->excluding(Selector::inNamespace('Modules\Notifications\Api'))
             ->because('Api is the contract the Notifications module offers');
@@ -52,6 +54,23 @@ final class InvoicesArchitectureRules
             ->classes(Selector::inNamespace('Modules\Invoices\Presentation'))
             ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Notifications'))
             ->because('the controller notifies through the send service, never directly');
+    }
+
+    public function test_notifications_do_not_depend_on_invoices(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules\Notifications'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Invoices'))
+            ->because('Invoices depends on Notifications, never the other way');
+    }
+
+    public function test_only_the_domain_depends_on_the_factories(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules'), Selector::inNamespace('App'))
+            ->excluding(Selector::inNamespace('Modules\Invoices\Domain'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Database\Factories'))
+            ->because('factories are test support that bypasses the status transitions');
     }
 
     public function test_modules_do_not_depend_on_app(): BuildStep
@@ -66,7 +85,7 @@ final class InvoicesArchitectureRules
     {
         return PHPat::rule()
             ->classes(Selector::inNamespace('App'))
-            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules'), Selector::inNamespace('Database\Factories'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules'))
             ->because('app/ holds framework glue that names no module');
     }
 

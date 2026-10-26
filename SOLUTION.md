@@ -29,7 +29,7 @@ Layer names mirror the Notifications module. There is no `Api/` folder because n
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
-Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let only Application and Infrastructure reach Notifications, through its `Api`, and keep `app/` apart from the modules and the factories. The arrows that start in the Notifications module or the factories are checked only against `app/`. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
+Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let only Application and Infrastructure reach Notifications, through its `Api`, keep Notifications from depending on Invoices, let only the Domain name the factories, and keep `app/` (not drawn) apart from the modules. Not checked: the arrows inside the Notifications module, the factories' own arrows, and `routes.php`, which is not a class. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
 
 ```mermaid
 flowchart TD;
