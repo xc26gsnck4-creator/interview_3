@@ -40,7 +40,8 @@
                                     },
                                     "required": [
                                         "data"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -62,7 +63,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -101,7 +103,8 @@
                                     },
                                     "required": [
                                         "data"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -120,7 +123,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -139,7 +143,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -178,7 +183,8 @@
                                     },
                                     "required": [
                                         "data"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -197,7 +203,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -216,7 +223,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -235,7 +243,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -254,7 +263,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -273,7 +283,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -326,7 +337,8 @@
                                     },
                                     "required": [
                                         "message"
-                                    ]
+                                    ],
+                                    "additionalProperties": false
                                 }
                             }
                         }
@@ -410,6 +422,7 @@
                     "unit_price",
                     "total_unit_price"
                 ],
+                "additionalProperties": false,
                 "title": "InvoiceProductLineResource"
             },
             "InvoiceResource": {
@@ -445,6 +458,7 @@
                     "product_lines",
                     "total_price"
                 ],
+                "additionalProperties": false,
                 "title": "InvoiceResource"
             },
             "StatusEnum": {
@@ -472,7 +486,8 @@
                             },
                             "required": [
                                 "message"
-                            ]
+                            ],
+                            "additionalProperties": false
                         }
                     }
                 }
@@ -502,7 +517,8 @@
                             "required": [
                                 "message",
                                 "errors"
-                            ]
+                            ],
+                            "additionalProperties": false
                         }
                     }
                 }
