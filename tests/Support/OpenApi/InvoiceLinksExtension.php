@@ -23,42 +23,38 @@ final class InvoiceLinksExtension extends OperationExtension
 {
     private const string INVOICE_ID_FROM_BODY = '$response.body#/data/id';
 
+    /**
+     * Route name, then response code, then link name: the target operation id
+     * and its parameters.
+     *
+     * @var array<string, array<int, array<string, array{string, array<string, string>}>>>
+     */
+    private const array LINKS = [
+        'invoices.store' => [
+            HttpResponse::HTTP_CREATED => [
+                'ShowInvoice' => ['invoices.show', ['invoice' => self::INVOICE_ID_FROM_BODY]],
+                'SendInvoice' => ['invoices.send', ['invoice' => self::INVOICE_ID_FROM_BODY]],
+            ],
+        ],
+        'invoices.send' => [
+            HttpResponse::HTTP_OK => [
+                'ShowInvoice' => ['invoices.show', ['invoice' => self::INVOICE_ID_FROM_BODY]],
+                'ReportDelivery' => ['notification.hook', ['action' => 'delivered', 'reference' => self::INVOICE_ID_FROM_BODY]],
+            ],
+        ],
+    ];
+
     public function handle(Operation $operation, RouteInfo $routeInfo): void
     {
-        $linked = match ($routeInfo->route->getName()) {
-            'invoices.store' => [
-                HttpResponse::HTTP_CREATED,
-                [
-                    'ShowInvoice' => new Link(operationId: 'invoices.show', parameters: ['invoice' => self::INVOICE_ID_FROM_BODY]),
-                    'SendInvoice' => new Link(operationId: 'invoices.send', parameters: ['invoice' => self::INVOICE_ID_FROM_BODY]),
-                ],
-            ],
-            'invoices.send' => [
-                HttpResponse::HTTP_OK,
-                [
-                    'ShowInvoice' => new Link(operationId: 'invoices.show', parameters: ['invoice' => self::INVOICE_ID_FROM_BODY]),
-                    'ReportDelivery' => new Link(
-                        operationId: 'notification.hook',
-                        parameters: ['action' => 'delivered', 'reference' => self::INVOICE_ID_FROM_BODY],
-                    ),
-                ],
-            ],
-            default => null,
-        };
-
-        if ($linked === null) {
-            return;
-        }
-
-        [$code, $links] = $linked;
+        $linksByCode = self::LINKS[$routeInfo->route->getName() ?? ''] ?? [];
 
         foreach ($operation->responses ?? [] as $response) {
-            if (! $response instanceof Response || $response->code !== $code) {
+            if (! $response instanceof Response || ! is_int($response->code)) {
                 continue;
             }
 
-            foreach ($links as $name => $link) {
-                $response->addLink($name, $link);
+            foreach ($linksByCode[$response->code] ?? [] as $name => [$operationId, $parameters]) {
+                $response->addLink($name, new Link(operationId: $operationId, parameters: $parameters));
             }
         }
     }
