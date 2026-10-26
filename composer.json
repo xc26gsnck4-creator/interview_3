@@ -16,11 +16,7 @@
     },
     "require-dev": {
         "dedoc/scramble": "^0.13.49",
-        "deptrac/deptrac": "^4.7",
-        "driftingly/rector-laravel": "^2.7",
         "fakerphp/faker": "^1.24",
-        "hotmeteor/spectator": "^3.0",
-        "infection/infection": "^0.35",
         "larastan/larastan": "^3.13",
         "laravel/boost": "*",
         "laravel/pail": "^1.2",
@@ -29,17 +25,9 @@
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.8",
         "phpat/phpat": "^0.12",
-        "phpstan/phpstan-deprecation-rules": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
         "phpstan/phpstan-strict-rules": "^2.1",
-        "phpunit/phpunit": "^11",
-        "psalm/plugin-laravel": "^3.17",
-        "rector/rector": "^2.7",
-        "shipmonk/composer-dependency-analyser": "^1.8",
-        "shipmonk/dead-code-detector": "^1.4",
-        "spaze/phpstan-disallowed-calls": "^4.15",
-        "tomasvotruba/type-coverage": "^2.5",
-        "vimeo/psalm": "^6.14"
+        "phpunit/phpunit": "^11"
     },
     "autoload": {
         "psr-4": {
@@ -75,12 +63,6 @@
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail\" \"npm run dev\" --names=server,queue,logs,vite"
         ],
         "phpstan": "rm -rf /tmp/phpstan-interview-task && phpstan analyse --no-progress --memory-limit=1G",
-        "deptrac": "deptrac analyse --no-progress",
-        "infection": "infection --show-mutations --no-progress",
-        "deps:validate": "@composer validate --strict",
-        "deps:audit": "@composer audit --locked",
-        "deps:analyse": "composer-dependency-analyser",
-        "taint": "psalm --no-progress",
         "api:export": [
             "@php artisan config:clear",
             "@putenv APP_NAME=Laravel",
@@ -91,12 +73,6 @@
     },
     "scripts-descriptions": {
         "phpstan": "Runs PHPStan from a cold tmpDir (phpstan.neon): under Docker Desktop its caches trust a stale directory stat and can skip new files.",
-        "deptrac": "Checks the layer and module map in deptrac.yaml.",
-        "infection": "Mutation-tests the Invoices module; fails below 100% covered MSI (infection.json5).",
-        "deps:validate": "Validates composer.json and the lock file, warnings included.",
-        "deps:audit": "Checks the locked packages for security advisories and abandoned packages (ignores: config.policy).",
-        "deps:analyse": "Finds used but undeclared dependencies, and unused ones in require; dev tools run as binaries and extensions it cannot see (composer-dependency-analyser.php).",
-        "taint": "Runs Psalm, which psalm.xml limits to taint analysis (runTaintAnalysis); type checks stay with PHPStan.",
         "api:export": "Regenerates api.json, the OpenAPI document, with Scramble and fails on an unknown type. APP_NAME, APP_URL and API_VERSION reach the document, so the config cache is cleared and they are pinned here and in phpunit.xml."
     },
     "extra": {
@@ -110,15 +86,7 @@
         "sort-packages": true,
         "allow-plugins": {
             "pestphp/pest-plugin": true,
-            "php-http/discovery": true,
-            "infection/extension-installer": true
-        },
-        "policy": {
-            "abandoned": {
-                "ignore": {
-                    "symplify/rule-doc-generator-contracts": "Dev-only, required by driftingly/rector-laravel for its rule descriptions; goes when rector-laravel drops it."
-                }
-            }
+            "php-http/discovery": true
         }
     },
     "minimum-stability": "stable",

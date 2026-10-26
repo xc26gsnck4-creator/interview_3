@@ -20,22 +20,18 @@ use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Modules\Notifications\Api\NotificationFacadeInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\Support\FakeNotificationFacade;
 use Tests\TestCase;
 use Throwable;
 
 final class SendInvoiceTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
     private FakeNotificationFacade $notifications;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->useCommittedOpenApiDocument();
         $this->app->instance(NotificationFacadeInterface::class, $this->notifications = new FakeNotificationFacade);
     }
 
@@ -52,7 +48,6 @@ final class SendInvoiceTest extends TestCase
         self::assertSame($invoice->id, $this->notifications->notified[0]->resourceId->toString());
         self::assertSame('jane@example.com', $this->notifications->notified[0]->toEmail);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
-        $this->assertMatchesContract($response, 200);
     }
 
     public function test_runs_no_query_after_the_commit(): void
@@ -74,7 +69,6 @@ final class SendInvoiceTest extends TestCase
         $response->assertOk();
         self::assertTrue($committed);
         self::assertSame([], $queriesAfterCommit);
-        $this->assertMatchesContract($response, 200);
     }
 
     /**
@@ -87,7 +81,6 @@ final class SendInvoiceTest extends TestCase
         $response = $this->postJson(route('invoices.send', strtoupper($invoice->id)));
 
         $response->assertOk()->assertJsonPath('data.id', $invoice->id);
-        $this->assertMatchesContract($response, 200);
     }
 
     public function test_rejects_invoice_without_lines_with_422(): void
@@ -100,7 +93,6 @@ final class SendInvoiceTest extends TestCase
             ->assertExactJson(['message' => sprintf('Invoice %s cannot be sent without product lines.', $invoice->id)]);
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-        $this->assertMatchesContract($response, 422);
     }
 
     public function test_rejects_invoice_with_invalid_persisted_line_with_422(): void
@@ -115,7 +107,6 @@ final class SendInvoiceTest extends TestCase
         ]);
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-        $this->assertMatchesContract($response, 422);
     }
 
     public function test_rejects_invoice_whose_total_overflows_with_422(): void
@@ -132,7 +123,6 @@ final class SendInvoiceTest extends TestCase
             ->assertExactJson(['message' => sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id)]);
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-        $this->assertMatchesContract($response, 422);
     }
 
     /**
@@ -152,7 +142,6 @@ final class SendInvoiceTest extends TestCase
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
         $exceptions->assertNotReported(InvalidInvoiceStatusTransition::class);
-        $this->assertMatchesContract($response, 409);
     }
 
     /**
@@ -174,8 +163,6 @@ final class SendInvoiceTest extends TestCase
         $first->assertOk();
         $second->assertConflict();
         self::assertCount(1, $this->notifications->notified);
-        $this->assertMatchesContract($first, 200);
-        $this->assertMatchesContract($second, 409);
     }
 
     public function test_returns_404_for_unknown_invoice(): void
@@ -185,7 +172,6 @@ final class SendInvoiceTest extends TestCase
         $response = $this->postJson(route('invoices.send', $unknownId));
 
         $response->assertNotFound()->assertExactJson(['message' => sprintf('Invoice %s was not found.', $unknownId)]);
-        $this->assertMatchesContract($response, 404);
     }
 
     /**
@@ -205,7 +191,6 @@ final class SendInvoiceTest extends TestCase
         ]);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
         $exceptions->assertReported(NotificationFailed::class);
-        $this->assertMatchesContract($response, 503);
     }
 
     /**

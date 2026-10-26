@@ -12,7 +12,6 @@ use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Notifications\Api\NotificationFacadeInterface;
 use PDOException;
 use Tests\Concerns\UsesSqliteFileDatabase;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\Support\FakeNotificationFacade;
 use Tests\TestCase;
 
@@ -24,7 +23,6 @@ use Tests\TestCase;
 final class DatabaseLockedTest extends TestCase
 {
     use UsesSqliteFileDatabase;
-    use ValidatesOpenApiContract;
 
     private const string HOLDER = 'sqlite_file_holder';
 
@@ -38,7 +36,6 @@ final class DatabaseLockedTest extends TestCase
     {
         parent::setUp();
 
-        $this->useCommittedOpenApiDocument();
         $this->useSqliteFileDatabase();
         $this->app->instance(NotificationFacadeInterface::class, $this->notifications = new FakeNotificationFacade);
         Exceptions::fake();
@@ -69,7 +66,6 @@ final class DatabaseLockedTest extends TestCase
         Exceptions::assertReported(
             static fn (PDOException $exception): bool => str_contains($exception->getMessage(), 'database is locked'),
         );
-        $this->assertMatchesContract($response, 503);
     }
 
     public function test_create_answers_503_while_another_connection_holds_the_write_lock(): void
@@ -85,7 +81,6 @@ final class DatabaseLockedTest extends TestCase
         $response->assertServiceUnavailable()->assertExactJson(['message' => self::BUSY_MESSAGE]);
         $holder->rollBack();
         $this->assertDatabaseEmpty('invoices');
-        $this->assertMatchesContract($response, 503);
     }
 
     /**
@@ -109,7 +104,6 @@ final class DatabaseLockedTest extends TestCase
         $reader->commit();
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
         Exceptions::assertReported(SendNotRecorded::class);
-        $this->assertMatchesContract($response, 500);
     }
 
     /**

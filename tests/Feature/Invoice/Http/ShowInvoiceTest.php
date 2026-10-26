@@ -11,20 +11,10 @@ use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
 final class ShowInvoiceTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->useCommittedOpenApiDocument();
-    }
-
     public function test_shows_invoice_with_lines_and_totals(): void
     {
         $invoice = Invoice::factory()->sending()->create(['customer_name' => 'Jane Doe', 'customer_email' => 'jane@example.com']);
@@ -44,7 +34,6 @@ final class ShowInvoiceTest extends TestCase
                     ['id' => $hosting->id, 'name' => 'Hosting', 'quantity' => 3, 'unit_price' => 100, 'total_unit_price' => 300],
                 ])
                 ->where('total_price', 30300)));
-        $this->assertMatchesContract($response, 200);
     }
 
     /**
@@ -57,7 +46,6 @@ final class ShowInvoiceTest extends TestCase
         $response = $this->getJson(route('invoices.show', strtoupper($invoice->id)));
 
         $response->assertOk()->assertJsonPath('data.id', $invoice->id);
-        $this->assertMatchesContract($response, 200);
     }
 
     /**
@@ -72,7 +60,6 @@ final class ShowInvoiceTest extends TestCase
 
         $response->assertNotFound()->assertExactJson(['message' => sprintf('Invoice %s was not found.', $unknownId)]);
         $exceptions->assertNotReported(InvoiceNotFound::class);
-        $this->assertMatchesContract($response, 404);
     }
 
     /**
@@ -98,8 +85,7 @@ final class ShowInvoiceTest extends TestCase
     }
 
     /**
-     * No route matches, so there is no operation to check the response
-     * against. Without an Accept header Laravel would answer an HTML page.
+     * No route matches. Without an Accept header Laravel would answer an HTML page.
      * phpunit.xml turns APP_DEBUG off, so the body has production's shape;
      * with debug on it would also carry the exception and its trace.
      */

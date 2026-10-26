@@ -18,8 +18,7 @@ use Illuminate\Support\Facades\File;
  * busy timeout, which keeps each wait for a lock short. The test calls
  * useSqliteFileDatabase() in setUp() and dropSqliteFileDatabase() in
  * tearDown() before parent::tearDown(), because RefreshDatabase rolls back the
- * default connection by name. The calls are explicit: the dead-code detector
- * cannot see Laravel's setUp<Trait> hooks.
+ * default connection by name.
  */
 trait UsesSqliteFileDatabase
 {

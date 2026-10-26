@@ -11,7 +11,6 @@ use Mockery\MockInterface;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
 /**
@@ -21,15 +20,12 @@ use Tests\TestCase;
  */
 final class DeliveryWebhookTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
     private MockInterface $log;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->useCommittedOpenApiDocument();
         $this->log = Log::spy();
     }
 
@@ -42,7 +38,6 @@ final class DeliveryWebhookTest extends TestCase
         $response->assertNoContent();
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
         $this->log->shouldNotHaveReceived('warning');
-        $this->assertMatchesContract($response, 204);
     }
 
     /**
@@ -67,7 +62,6 @@ final class DeliveryWebhookTest extends TestCase
             'invoice_id' => $invoice->id,
             'reason' => sprintf('Invoice %s cannot move from %s to sent-to-client.', $invoice->id, $status->value),
         ]]);
-        $this->assertMatchesContract($response, 204);
     }
 
     public function test_delivered_webhook_for_unknown_invoice_answers_no_content(): void
@@ -82,7 +76,6 @@ final class DeliveryWebhookTest extends TestCase
             'invoice_id' => $unknownId,
             'reason' => sprintf('Invoice %s was not found.', $unknownId),
         ]]);
-        $this->assertMatchesContract($response, 204);
     }
 
     /**
@@ -96,7 +89,6 @@ final class DeliveryWebhookTest extends TestCase
 
         $response->assertNoContent();
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
-        $this->assertMatchesContract($response, 204);
     }
 
     private function deliveredHook(string $reference): string

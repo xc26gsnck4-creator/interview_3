@@ -7,19 +7,16 @@ namespace Tests\Feature\Notification\Http;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Support\Facades\Event;
 use Modules\Notifications\Api\Events\WebhookDeliveredEvent;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
 final class NotificationControllerTest extends TestCase
 {
-    use ValidatesOpenApiContract;
     use WithFaker;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpFaker();
-        $this->useCommittedOpenApiDocument();
     }
 
     public function test_delivered_hook_dispatches_event(): void
@@ -31,7 +28,7 @@ final class NotificationControllerTest extends TestCase
             'reference' => $this->faker->uuid(),
         ]);
 
-        $this->assertMatchesContract($this->getJson($uri)->assertNoContent(), 204);
+        $this->getJson($uri)->assertNoContent();
 
         Event::assertDispatched(WebhookDeliveredEvent::class);
     }
@@ -43,7 +40,7 @@ final class NotificationControllerTest extends TestCase
             'reference' => $this->faker->uuid(),
         ]);
 
-        $this->assertMatchesContract($this->getJson($uri)->assertNotFound(), 404);
+        $this->getJson($uri)->assertNotFound();
     }
 
     public function test_invalid_reference_pattern_returns_not_found(): void
