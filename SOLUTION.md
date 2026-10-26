@@ -100,7 +100,7 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
-| The database stays locked past the 5 s busy timeout | 503, nothing written, retryable | unchanged | [`DatabaseLockedTest`] (create, send), [`DatabaseLockedRendererTest`] (any `/api` path) |
+| The database stays locked past the 5 s busy timeout (except a send's commit after the notification: the 500 above) | 503, nothing written, retryable | unchanged | [`DatabaseLockedTest`] (create, send), [`DatabaseLockedRendererTest`] (any `/api` path) |
 
 Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the `Accept` header.
 
@@ -110,7 +110,7 @@ Decision 5 was confirmed knowing these consequences:
 
 - SQLite's database-wide write lock is held from `BEGIN` until the commit, so other writers wait while `notify()` runs. The provided `DummyDriver` returns at once.
 - A concurrent second send waits, then gets 409. If the wait runs out it fails at `BEGIN` with the busy 503. Either way it never notifies.
-- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If it waits past the timeout, the webhook answers 503 and the provider can retry.
+- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If the send rolls back instead, the report finds `draft` and is ignored with a warning (204). If it waits past the timeout, the webhook answers 503 and the provider can retry.
 - A commit that fails after the notification leaves the invoice in draft and answers the not-recorded 500 (decision 8). `SQLiteConnection` rolls such a commit back at once, so the lock is released.
 - A failed notification does not tell whether the email arrived. A provider that delivers and then throws gets its send rolled back, and a retry sends a duplicate. `NotifyData` carries the invoice uuid as its reference, which a real provider can deduplicate on.
 
