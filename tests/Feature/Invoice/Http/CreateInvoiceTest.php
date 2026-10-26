@@ -167,9 +167,22 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 201);
     }
 
-    public function test_accepts_text_of_exactly_255_characters(): void
+    /**
+     * @return Iterator<string, array{string}>
+     */
+    public static function textCharacters(): Iterator
     {
-        $name = str_repeat('n', 255);
+        yield 'ascii' => ['n'];
+        yield 'multibyte' => ['ń'];
+    }
+
+    /**
+     * The limit counts characters, as the document's `maxLength` does, not bytes.
+     */
+    #[DataProvider('textCharacters')]
+    public function test_accepts_text_of_exactly_255_characters(string $character): void
+    {
+        $name = str_repeat($character, 255);
 
         $response = $this->postJson(route('invoices.store'), [
             ...self::withLine([...self::LINE, 'name' => $name]),
@@ -197,24 +210,6 @@ final class CreateInvoiceTest extends TestCase
         $response->assertCreated()->assertJsonPath('data.customer_email', $email);
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_email' => $email]);
         $this->assertMatchesContract($response, 201, validRequest: false);
-    }
-
-    /**
-     * The limit counts characters, as the document's `maxLength` does, not bytes.
-     */
-    public function test_accepts_255_multibyte_characters(): void
-    {
-        $name = str_repeat('ń', 255);
-
-        $response = $this->postJson(route('invoices.store'), [
-            ...self::withLine([...self::LINE, 'name' => $name]),
-            'customer_name' => $name,
-        ]);
-
-        $response->assertCreated()
-            ->assertJsonPath('data.customer_name', $name)
-            ->assertJsonPath('data.product_lines.0.name', $name);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
@@ -260,8 +255,7 @@ final class CreateInvoiceTest extends TestCase
 
     /**
      * A name that fits once trimmed fails only the check of the input as sent,
-     * which adds the failure under the studly rule name 'Max', so the client
-     * gets the rule's own string message.
+     * which reports Laravel's own `max` message for a string.
      */
     public function test_reports_the_max_message_for_a_name_over_the_limit_as_sent(): void
     {
@@ -271,6 +265,35 @@ final class CreateInvoiceTest extends TestCase
         self::assertSame([
             'customer_name' => ['The customer name field must not be greater than 255 characters.'],
         ], $response->json('errors'));
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    /**
+     * Each value fails a rule and also breaks a later one: 256 items for `max`,
+     * or 256 characters as sent.
+     *
+     * @return Iterator<string, array{array<mixed>, string, string}>
+     */
+    public static function textValuesFailingTwoRules(): Iterator
+    {
+        yield 'customer name as 256 strings' => [[...self::PAYLOAD, 'customer_name' => array_fill(0, 256, 'n')], 'customer_name', 'The customer name field must be a string.'];
+        yield 'customer email of 255 characters without an @ after a tab' => [[...self::PAYLOAD, 'customer_email' => "\t".str_repeat('n', 255)], 'customer_email', 'The customer email field must be a valid email address.'];
+        yield 'line name as 256 strings' => [self::withLine([...self::LINE, 'name' => array_fill(0, 256, 'n')]), 'product_lines.0.name', 'The product_lines.0.name field must be a string.'];
+    }
+
+    /**
+     * `bail` stops a text field at its first failure, so the later rule adds
+     * no second message.
+     *
+     * @param  array<mixed>  $payload
+     */
+    #[DataProvider('textValuesFailingTwoRules')]
+    public function test_reports_only_the_first_failure_of_a_text_field(array $payload, string $errorKey, string $message): void
+    {
+        $response = $this->postJson(route('invoices.store'), $payload);
+
+        $response->assertUnprocessable();
+        self::assertSame([$errorKey => [$message]], $response->json('errors'));
         $this->assertMatchesContract($response, 422, validRequest: false);
     }
 

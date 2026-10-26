@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Presentation\Http\Requests;
 
-use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Presentation\Http\Rules\MaxLengthAsSent;
 use Override;
 
 final class CreateInvoiceRequest extends FormRequest
@@ -60,19 +60,24 @@ final class CreateInvoiceRequest extends FormRequest
      * Scramble applies the line cap (maxItems) only to a known array type. A line
      * that is not an object fails its field rules, so `product_lines.*` needs no
      * rule of its own (one would make validated() scan every rule key once per
-     * line).
+     * line). A text field checks its length as sent (MaxLengthAsSent) last, and
+     * `bail` stops the field at its first failure, so that check runs only on a
+     * value the other rules accepted after trimming and a field reports one
+     * message.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<string|MaxLengthAsSent>>
      */
     public function rules(): array
     {
         $amount = ['required', 'integer:strict', 'min:1', 'max:'.InvoiceProductLine::MAX_VALUE];
+        $sentBody = $this->isJson() ? json_decode($this->getContent(), true) : null;
+        $lengthAsSent = new MaxLengthAsSent(self::MAX_TEXT_LENGTH, is_array($sentBody) ? $sentBody : []);
 
         return [
-            'customer_name' => ['required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH],
-            'customer_email' => ['required', 'email', 'max:'.self::MAX_TEXT_LENGTH],
+            'customer_name' => ['bail', 'required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH, $lengthAsSent],
+            'customer_email' => ['bail', 'required', 'email', 'max:'.self::MAX_TEXT_LENGTH, $lengthAsSent],
             'product_lines' => ['array', 'list', 'max:'.self::MAX_PRODUCT_LINES],
-            'product_lines.*.name' => ['required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH],
+            'product_lines.*.name' => ['bail', 'required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH, $lengthAsSent],
             'product_lines.*.quantity' => $amount,
             'product_lines.*.unit_price' => $amount,
         ];
@@ -105,48 +110,6 @@ final class CreateInvoiceRequest extends FormRequest
             }
         });
         $validator->validate();
-    }
-
-    /**
-     * Laravel trims a string (whitespace, control and invisible characters such
-     * as a tab or U+00AD, see `Str::trim`) before the rules run, so `max` sees
-     * the trimmed value while the API document's `maxLength` applies to the
-     * input as sent. The raw body is therefore measured too, in characters
-     * (`mb_strlen`, like JSON Schema) and only for a field with no error yet,
-     * so a value over the limit after trimming reports one message. The failure
-     * is the rule's own: the studly name 'Max' is what makes Laravel pick the
-     * string variant of the message. It is added here, on the validator Laravel
-     * builds, rather than in an `after()` method, which the final class would
-     * have to keep protected for the framework to call it.
-     */
-    #[Override]
-    protected function getValidatorInstance(): ValidatorContract
-    {
-        $validator = parent::getValidatorInstance();
-        $validator->after(function (Validator $validator): void {
-            if (! $this->isJson()) {
-                return;
-            }
-
-            $body = json_decode($this->getContent(), true);
-            $values = [
-                'customer_name' => data_get($body, 'customer_name'),
-                'customer_email' => data_get($body, 'customer_email'),
-            ];
-            $lines = data_get($body, 'product_lines');
-
-            foreach (is_array($lines) ? $lines : [] as $index => $line) {
-                $values["product_lines.{$index}.name"] = data_get($line, 'name');
-            }
-
-            foreach ($values as $key => $value) {
-                if (is_string($value) && mb_strlen($value) > self::MAX_TEXT_LENGTH && ! $validator->errors()->has($key)) {
-                    $validator->addFailure($key, 'Max', [self::MAX_TEXT_LENGTH]);
-                }
-            }
-        });
-
-        return $validator;
     }
 
     /**
