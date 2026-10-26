@@ -434,26 +434,6 @@ final class CreateInvoiceTest extends TestCase
     }
 
     /**
-     * The length check of the input as sent reads the raw body only of a request
-     * marked as JSON: a line name of 256 characters in a body of another type
-     * adds no error of its own, the missing fields are the only ones.
-     */
-    public function test_does_not_measure_the_text_of_a_body_without_a_json_content_type(): void
-    {
-        $response = $this->call(
-            'POST',
-            route('invoices.store'),
-            server: ['CONTENT_TYPE' => 'text/plain', 'HTTP_ACCEPT' => 'application/json'],
-            content: (string) json_encode(self::withLine([...self::LINE, 'name' => str_repeat('n', 256)])),
-        );
-
-        $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['customer_name', 'customer_email'])
-            ->assertJsonMissingValidationErrors(['product_lines.0.name']);
-        $this->assertMatchesContract($response, 422, validRequest: false);
-    }
-
-    /**
      * @return Iterator<string, array{string}>
      */
     public static function jsonBodiesThatAreNotObjects(): Iterator

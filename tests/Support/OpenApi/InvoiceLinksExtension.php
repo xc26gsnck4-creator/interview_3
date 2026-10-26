@@ -29,7 +29,7 @@ final class InvoiceLinksExtension extends OperationExtension
      *
      * @var array<string, array<int, array<string, array{string, array<string, string>}>>>
      */
-    private const array LINKS = [
+    public const array LINKS = [
         'invoices.store' => [
             HttpResponse::HTTP_CREATED => [
                 'ShowInvoice' => ['invoices.show', ['invoice' => self::INVOICE_ID_FROM_BODY]],

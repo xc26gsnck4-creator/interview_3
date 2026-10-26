@@ -7,24 +7,20 @@ namespace Tests\Feature\Api;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Tests\Support\OpenApi\InvoiceLinksExtension;
 use Tests\TestCase;
 
 /**
  * Schemathesis follows the links in api.json (added by
  * Tests\Support\OpenApi\InvoiceLinksExtension) to reach an existing invoice; a
- * link to an operation or a parameter the document does not have, or one that
- * reads a property the response body does not have, would not be followed, and
- * send and the webhook would only be fuzzed into a 404.
+ * link to an operation or a parameter the document does not have, one that
+ * leaves a required path parameter unset, or one that reads a property the
+ * response body does not have, would not be followed, and send and the webhook
+ * would only be fuzzed into a 404. Every link the extension declares must be in
+ * the committed document.
  */
 final class OpenApiLinksTest extends TestCase
 {
-    private const array EXPECTED_LINKS = [
-        'post /invoices 201 ShowInvoice' => 'invoices.show',
-        'post /invoices 201 SendInvoice' => 'invoices.send',
-        'post /invoices/{invoice}/send 200 ShowInvoice' => 'invoices.show',
-        'post /invoices/{invoice}/send 200 ReportDelivery' => 'notification.hook',
-    ];
-
     /**
      * The fields of a path item that hold an operation; the others
      * (`parameters`, `summary`, `servers`, ...) are not operations.
@@ -45,32 +41,59 @@ final class OpenApiLinksTest extends TestCase
         $this->document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
         $parametersByOperation = [];
         $links = [];
+        $linksByOperation = [];
 
         foreach (Arr::array($this->document, 'paths') as $uri => $pathItem) {
             foreach (Arr::only($this->asArray($pathItem), self::HTTP_METHODS) as $method => $operation) {
                 $operation = $this->asArray($operation);
-                $parametersByOperation[Arr::string($operation, 'operationId')] = array_column(Arr::array($operation, 'parameters', []), 'name');
+                $operationId = Arr::string($operation, 'operationId');
+                $parametersByOperation[$operationId] = Arr::array($operation, 'parameters', []);
 
                 foreach (Arr::array($operation, 'responses') as $status => $response) {
                     $response = $this->asArray($response);
 
                     foreach (Arr::array($response, 'links', []) as $name => $link) {
-                        $links[sprintf('%s %s %s %s', $method, $uri, $status, $name)] = [$this->asArray($link), Arr::get($response, 'content.application/json.schema')];
+                        $link = $this->asArray($link);
+                        $linksByOperation[$operationId][$status][$name] = $link;
+                        $links[sprintf('%s %s %s %s', $method, $uri, $status, $name)] = [$link, Arr::get($response, 'content.application/json.schema')];
                     }
                 }
             }
         }
 
-        foreach (self::EXPECTED_LINKS as $source => $operationId) {
-            self::assertSame($operationId, $links[$source][0]['operationId'] ?? null, "api.json lacks the link {$source}.");
+        foreach (InvoiceLinksExtension::LINKS as $routeName => $linksByCode) {
+            foreach ($linksByCode as $code => $linksByName) {
+                foreach ($linksByName as $name => [$targetOperationId]) {
+                    self::assertSame(
+                        $targetOperationId,
+                        $linksByOperation[$routeName][$code][$name]['operationId'] ?? null,
+                        "api.json lacks the link {$name} of {$routeName} {$code} to {$targetOperationId}.",
+                    );
+                }
+            }
         }
 
         foreach ($links as $source => [$link, $bodySchema]) {
             $operationId = Arr::string($link, 'operationId');
             self::assertArrayHasKey($operationId, $parametersByOperation, "{$source} links to {$operationId}, which api.json does not have.");
+            $targetParameters = $parametersByOperation[$operationId];
+            $set = Arr::array($link, 'parameters', []);
 
-            foreach (Arr::array($link, 'parameters', []) as $parameter => $value) {
-                self::assertContains($parameter, $parametersByOperation[$operationId], "{$source} sets {$parameter}, which {$operationId} does not take.");
+            foreach ($targetParameters as $targetParameter) {
+                $targetParameter = $this->asArray($targetParameter);
+
+                if (($targetParameter['in'] ?? null) === 'path' && ($targetParameter['required'] ?? false) === true) {
+                    $name = Arr::string($targetParameter, 'name');
+                    self::assertArrayHasKey($name, $set, "{$source} does not set the path parameter {$name} of {$operationId}.");
+                }
+            }
+
+            if (str_ends_with($source, ' ReportDelivery')) {
+                self::assertSame('delivered', $set['action'] ?? null, "{$source} must set action to delivered.");
+            }
+
+            foreach ($set as $parameter => $value) {
+                self::assertContains($parameter, array_column($targetParameters, 'name'), "{$source} sets {$parameter}, which {$operationId} does not take.");
 
                 if (is_string($value) && str_starts_with($value, self::RESPONSE_BODY)) {
                     self::assertTrue(

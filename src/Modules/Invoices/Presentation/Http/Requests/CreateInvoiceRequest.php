@@ -65,8 +65,10 @@ final class CreateInvoiceRequest extends FormRequest
      * value the other rules accepted after trimming and a field reports one
      * message. `max:` is there for the API document (Scramble's `maxLength`):
      * at runtime, for a JSON body, the check of the length as sent already
-     * rejects everything `max:` would, because trimming only shortens a value;
-     * `max:` reports first when the trimmed value is already too long.
+     * rejects what `max:` would, because trimming only shortens a value, except
+     * for a body the object decode rejects (see sentBody()), where only `max:`
+     * measures the trimmed value; `max:` reports first when the trimmed value
+     * is already too long.
      *
      * @return array<string, list<string|MaxLengthAsSent>>
      */
@@ -138,14 +140,15 @@ final class CreateInvoiceRequest extends FormRequest
 
     /**
      * The raw body decoded once per request (`once()`), keeping JSON objects as
-     * objects so that `{}` and `[]` stay apart; null when the request is not
-     * marked as JSON or the body does not decode. The check of product_lines'
-     * shape and the check of the length as sent both read it. A body the
-     * object decode rejects (e.g. a key starting with NUL) leaves the as-sent
-     * check nothing to read, so only the trimmed value is checked.
+     * objects so that `{}` and `[]` stay apart; null when the body does not
+     * decode. A body that is not JSON is never validated (validationData() is
+     * empty), so nothing reads its decode. The check of product_lines' shape
+     * and the check of the length as sent both read it. A body the object
+     * decode rejects (e.g. a key starting with NUL) leaves the as-sent check
+     * nothing to read, so only the trimmed value is checked.
      */
     private function sentBody(): mixed
     {
-        return once(fn (): mixed => $this->isJson() ? json_decode($this->getContent()) : null);
+        return once(fn (): mixed => json_decode($this->getContent()));
     }
 }
