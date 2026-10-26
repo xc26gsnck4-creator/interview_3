@@ -7,6 +7,7 @@ namespace Tests\Feature\Api;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Tests\Concerns\ResolvesJsonPointers;
 use Tests\Support\OpenApi\InvoiceLinksExtension;
 use Tests\TestCase;
 
@@ -21,6 +22,8 @@ use Tests\TestCase;
  */
 final class OpenApiLinksTest extends TestCase
 {
+    use ResolvesJsonPointers;
+
     /**
      * The fields of a path item that hold an operation; the others
      * (`parameters`, `summary`, `servers`, ...) are not operations.
@@ -63,11 +66,17 @@ final class OpenApiLinksTest extends TestCase
 
         foreach (InvoiceLinksExtension::LINKS as $routeName => $linksByCode) {
             foreach ($linksByCode as $code => $linksByName) {
-                foreach ($linksByName as $name => [$targetOperationId]) {
+                foreach ($linksByName as $name => [$targetOperationId, $parameters]) {
+                    $documented = $linksByOperation[$routeName][$code][$name] ?? [];
                     self::assertSame(
                         $targetOperationId,
-                        $linksByOperation[$routeName][$code][$name]['operationId'] ?? null,
+                        $documented['operationId'] ?? null,
                         "api.json lacks the link {$name} of {$routeName} {$code} to {$targetOperationId}.",
+                    );
+                    self::assertSame(
+                        $parameters,
+                        $documented['parameters'] ?? null,
+                        "api.json declares other parameters for the link {$name} of {$routeName} {$code} than the extension.",
                     );
                 }
             }
@@ -86,10 +95,6 @@ final class OpenApiLinksTest extends TestCase
                     $name = Arr::string($targetParameter, 'name');
                     self::assertArrayHasKey($name, $set, "{$source} does not set the path parameter {$name} of {$operationId}.");
                 }
-            }
-
-            if (str_ends_with($source, ' ReportDelivery')) {
-                self::assertSame('delivered', $set['action'] ?? null, "{$source} must set action to delivered.");
             }
 
             foreach ($set as $parameter => $value) {
@@ -111,7 +116,7 @@ final class OpenApiLinksTest extends TestCase
      */
     private function hasProperty(mixed $schema, string $pointer): bool
     {
-        foreach ($this->tokens($pointer) as $token) {
+        foreach ($this->pointerTokens($pointer) as $token) {
             $properties = $this->asArray($this->dereference($schema)['properties'] ?? null);
 
             if (! array_key_exists($token, $properties)) {
@@ -126,11 +131,13 @@ final class OpenApiLinksTest extends TestCase
 
     /**
      * Follows a local `$ref` (`#/components/...`) into api.json until the
-     * schema is inline.
+     * schema is inline; a reference that does not resolve, or one already
+     * followed (a cycle), fails the test.
      *
+     * @param  list<string>  $followed
      * @return array<array-key, mixed>
      */
-    private function dereference(mixed $schema): array
+    private function dereference(mixed $schema, array $followed = []): array
     {
         $schema = $this->asArray($schema);
         $reference = $schema['$ref'] ?? null;
@@ -139,26 +146,13 @@ final class OpenApiLinksTest extends TestCase
             return $schema;
         }
 
-        $target = $this->document;
+        $target = in_array($reference, $followed, true) ? null : $this->resolvePointer($this->document, $reference);
 
-        foreach ($this->tokens(Str::after($reference, '#')) as $token) {
-            $target = $this->asArray($target)[$token] ?? null;
+        if ($target === null) {
+            self::fail("unresolved \$ref {$reference}");
         }
 
-        return $this->dereference($target);
-    }
-
-    /**
-     * The tokens of a JSON pointer (RFC 6901: `~1` is `/`, `~0` is `~`).
-     *
-     * @return list<string>
-     */
-    private function tokens(string $pointer): array
-    {
-        return array_map(
-            static fn (string $token): string => str_replace(['~1', '~0'], ['/', '~'], $token),
-            array_slice(explode('/', $pointer), 1),
-        );
+        return $this->dereference($target, [...$followed, $reference]);
     }
 
     /**

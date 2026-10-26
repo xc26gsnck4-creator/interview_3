@@ -36,7 +36,10 @@ max-examples = 500
 # document accepts, for rules the document cannot express: text that is empty
 # after trimming (Laravel trims strings and turns blank ones into null), a total
 # that overflows, and a send of an invoice without product lines.
-expected-statuses = ["2xx", "3xx", "401", "403", "404", "409", "429", "5xx", "422"]
+# 422 is accepted for every operation rather than per operation (`[[operations]]`
+# could scope it): show and the webhook document no 422 (`status_code_conformance`
+# already flags one there), and for create a wrong 422 cannot be told from a right one.
+expected-statuses =["2xx", "3xx", "401", "403", "404", "409", "429", "5xx", "422"]
 
 [phases.coverage]
 # Every undeclared method the coverage phase sends by default except QUERY:

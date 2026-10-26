@@ -75,7 +75,7 @@ final class CreateInvoiceRequest extends FormRequest
     public function rules(): array
     {
         $amount = ['required', 'integer:strict', 'min:1', 'max:'.InvoiceProductLine::MAX_VALUE];
-        $lengthAsSent = new MaxLengthAsSent(self::MAX_TEXT_LENGTH, $this->sentBody());
+        $lengthAsSent = new MaxLengthAsSent(self::MAX_TEXT_LENGTH, fn (): mixed => $this->sentBody());
 
         return [
             'customer_name' => ['bail', 'required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH, $lengthAsSent],
@@ -141,9 +141,10 @@ final class CreateInvoiceRequest extends FormRequest
     /**
      * The raw body decoded once per request (`once()`), keeping JSON objects as
      * objects so that `{}` and `[]` stay apart; null when the body does not
-     * decode. A body that is not JSON is never validated (validationData() is
-     * empty), so nothing reads its decode. The check of product_lines' shape
-     * and the check of the length as sent both read it. A body the object
+     * decode. It is decoded only when read: by the check of product_lines'
+     * shape (when product_lines is an array) and by the check of the length as
+     * sent (when a text field reaches it), so a body with neither is never
+     * decoded. A body the object
      * decode rejects (e.g. a key starting with NUL) leaves the as-sent check
      * nothing to read, so only the trimmed value is checked.
      */

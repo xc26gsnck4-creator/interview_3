@@ -19,11 +19,11 @@ use Illuminate\Translation\PotentiallyTranslatedString;
 final readonly class MaxLengthAsSent implements ValidationRule
 {
     /**
-     * @param  mixed  $sentBody  the JSON body as sent, decoded once with objects kept; null when the request is not JSON
+     * @param  Closure(): mixed  $sentBody  returns the JSON body as sent (objects kept, null when it does not decode); called only when a field is validated
      */
     public function __construct(
         private int $maxLength,
-        private mixed $sentBody,
+        private Closure $sentBody,
     ) {}
 
     /**
@@ -31,7 +31,7 @@ final readonly class MaxLengthAsSent implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $sent = data_get($this->sentBody, $attribute);
+        $sent = data_get(($this->sentBody)(), $attribute);
 
         if (is_string($sent) && mb_strlen($sent) > $this->maxLength) {
             $fail('validation.max.string')->translate(['max' => $this->maxLength]);
