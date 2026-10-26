@@ -5,7 +5,6 @@ includes:
     - vendor/phpstan/phpstan-phpunit/extension.neon
     - vendor/phpstan/phpstan-phpunit/rules.neon
     - vendor/phpat/phpat/extension.neon
-    - phpstan-baseline.neon
 
 parameters:
     level: max

@@ -29,7 +29,7 @@ Layer names mirror the Notifications module. There is no `Api/` folder because n
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
-Allowed dependencies. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the module's layers pointing inwards, let Invoices reach Notifications only through its `Api`, and keep `app/` and the modules apart. The Notifications module and the factories are not checked. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
+Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let Invoices reach Notifications only through its `Api`, and keep `app/` and the modules apart. The arrows that start in the Notifications module or the factories are not checked. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
 
 ```mermaid
 flowchart TD;
@@ -129,7 +129,7 @@ Set up with `./start.sh` as the README says. The commands run through Laravel Sa
 |---|---|---|
 | `vendor/bin/sail artisan test` | the test suite | in-memory SQLite; never touches `database/database.sqlite` |
 | `vendor/bin/sail bin pint --test` | code style (Laravel preset) | |
-| `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. The baseline is empty, and the one ignore in `phpstan.neon` is structural and commented |
+| `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. There is no baseline; the one ignore in `phpstan.neon` is structural and commented |
 | `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
 
 **API document.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Three dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer: the mapped exceptions' responses and `total_price` as an integer ([#15]), and the busy 503 on every operation ([#16]). `APP_NAME`, `APP_URL` and `API_VERSION` reach the document, so `phpunit.xml` and `api:export` pin them. `phpunit.xml` also pins `APP_DEBUG=false`, so the tests see production's error bodies.

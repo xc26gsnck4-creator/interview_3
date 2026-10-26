@@ -85,8 +85,7 @@ final class ShowInvoiceTest extends TestCase
     }
 
     /**
-     * No route matches, so there is no operation to check the response
-     * against. Without an Accept header Laravel would answer an HTML page.
+     * No route matches. Without an Accept header Laravel would answer an HTML page.
      * phpunit.xml turns APP_DEBUG off, so the body has production's shape;
      * with debug on it would also carry the exception and its trace.
      */

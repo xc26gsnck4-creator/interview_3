@@ -14,7 +14,7 @@ use PHPat\Test\PHPat;
  * PHPStan through phpat (a `phpat.test` service in phpstan.neon), not by
  * PHPUnit. Presentation and Infrastructure depend on Application, Application
  * on Domain, and Invoices reaches Notifications only through its Api. The
- * Notifications module is the task's own code and stays unchecked.
+ * Notifications module is the task's own code: its layers stay unchecked.
  */
 final class InvoicesArchitectureRules
 {
@@ -40,11 +40,8 @@ final class InvoicesArchitectureRules
     {
         return PHPat::rule()
             ->classes(Selector::inNamespace('Modules\Invoices'))
-            ->shouldNot()->dependOn()->classes(
-                Selector::inNamespace('Modules\Notifications\Application'),
-                Selector::inNamespace('Modules\Notifications\Infrastructure'),
-                Selector::inNamespace('Modules\Notifications\Presentation'),
-            )
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Notifications'))
+            ->excluding(Selector::inNamespace('Modules\Notifications\Api'))
             ->because('Api is the contract the Notifications module offers');
     }
 

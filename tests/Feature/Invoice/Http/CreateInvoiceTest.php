@@ -179,10 +179,6 @@ final class CreateInvoiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_name' => $name]);
     }
 
-    /**
-     * The document's `email` format caps an address at 254 characters (RFC 5321)
-     * while the rule accepts 255.
-     */
     public function test_accepts_an_email_of_exactly_255_characters(): void
     {
         $email = self::validEmailOfLength(255);
