@@ -1,0 +1,34 @@
+# Schemathesis settings for fuzz-api.sh, which runs the pinned
+# schemathesis/schemathesis:4.32.5 image against the committed api.json.
+# Every check and every phase stays on; the settings below are the exceptions.
+
+# The second, debug-off server that fuzz-api.sh starts inside the app container
+# on a throwaway SQLite database. The fuzzer shares the container's network, so
+# the port is never published, and the app Sail serves on port 80 (debug on,
+# database/database.sqlite) is never fuzzed.
+base-url = "http://127.0.0.1:8001/api"
+
+# The fixed seed of the script's first run, picked because its run is clean and
+# reaches a send 200 and a webhook 204, which the script's coverage guard
+# requires. The second run draws a random seed and passes it as --seed; to replay
+# a failure of that run, put its seed here for one run.
+seed = 1
+
+[generation]
+# 500 examples per operation: with the default 100 the linked scenarios
+# (create, then send, then the delivery webhook) seldom reach an invoice that has
+# lines, so a successful send was rare and a webhook 204 never happened.
+max-examples = 500
+
+[checks.positive_data_acceptance]
+# The default list plus 422: the API answers its documented 422 to some data the
+# document accepts, for rules the document cannot express: text that is empty
+# after trimming (Laravel trims strings and turns blank ones into null), a total
+# that overflows, and a send of an invoice without product lines.
+expected-statuses = ["2xx", "3xx", "401", "403", "404", "409", "429", "5xx", "422"]
+
+[phases.coverage]
+# Every undeclared method the coverage phase sends by default except QUERY:
+# PHP's built-in server (artisan serve) answers QUERY with 501 before the request
+# reaches Laravel, which would answer 405 behind nginx and php-fpm.
+unexpected-methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "TRACE"]
