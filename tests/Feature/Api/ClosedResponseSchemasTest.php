@@ -13,6 +13,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Modules\Invoices\Domain\Models\Invoice;
 use PHPUnit\Framework\ExpectationFailedException;
+use Tests\Concerns\ResolvesJsonPointers;
 use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 use Throwable;
@@ -25,6 +26,7 @@ use Throwable;
  */
 final class ClosedResponseSchemasTest extends TestCase
 {
+    use ResolvesJsonPointers;
     use ValidatesOpenApiContract;
 
     /** @var array<array-key, mixed> */
@@ -136,7 +138,7 @@ final class ClosedResponseSchemasTest extends TestCase
         if (is_string($reference)) {
             if (! isset($this->visited[$reference])) {
                 $this->visited[$reference] = true;
-                $target = $this->resolvePointer($reference);
+                $target = $this->resolvePointer($this->document, $reference);
 
                 if ($target === null) {
                     $this->unresolved[] = $path.' -> '.$reference;
@@ -175,33 +177,6 @@ final class ClosedResponseSchemasTest extends TestCase
                 $this->walkSchema($node[$keyword], $path.$suffix);
             }
         }
-    }
-
-    /**
-     * Resolves a local `#/a/b` reference segment by segment (RFC 6901: `~1` is
-     * `/`, `~0` is `~`), so a component name with dots resolves too.
-     *
-     * @return array<array-key, mixed>|null
-     */
-    private function resolvePointer(string $reference): ?array
-    {
-        if (! str_starts_with($reference, '#/')) {
-            return null;
-        }
-
-        $target = $this->document;
-
-        foreach (explode('/', substr($reference, 2)) as $segment) {
-            $segment = str_replace(['~1', '~0'], ['/', '~'], $segment);
-
-            if (! is_array($target) || ! array_key_exists($segment, $target)) {
-                return null;
-            }
-
-            $target = $target[$segment];
-        }
-
-        return is_array($target) ? $target : null;
     }
 
     /**

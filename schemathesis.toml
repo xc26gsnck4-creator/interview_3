@@ -1,0 +1,48 @@
+# Schemathesis settings for fuzzing the API against the committed api.json with
+# the pinned schemathesis/schemathesis:4.32.5 image. Every check and every phase
+# stays on; the settings below are the exceptions.
+#
+# Run from the project root with Sail up, in two terminals:
+#
+# 1. The server (stop it with Ctrl+C): a second `artisan serve` in the app
+#    container, debug off, on a throwaway SQLite file in /tmp, logging to stderr.
+#    Without --no-reload, ServeCommand hands its php -S workers a blanked environment, so they re-read .env (debug on, writes to database/database.sqlite).
+#    A cached config (bootstrap/cache/config.php) would make the server ignore these variables: run `vendor/bin/sail artisan config:clear` first.
+#
+#    vendor/bin/sail bash -c 'export DB_DATABASE=/tmp/fuzz-api.sqlite && rm -f "$DB_DATABASE"* && touch "$DB_DATABASE" && php artisan migrate --force && APP_DEBUG=false LOG_CHANNEL=stderr exec php artisan serve --host=127.0.0.1 --port=8001 --no-reload'
+#
+# 2. The fuzzer, in the app container's network, so port 8001 is never
+#    published. It runs in the image's working directory, /app, which is
+#    writable: .hypothesis/ and the coverage report go there and are removed with
+#    the container. No seed is pinned, so each run explores new data.
+#    Schemathesis prints the seed it used; appending --seed <seed> to this
+#    command replays it (restart the server first for a fresh database). Seed 1
+#    reached send (200) and the delivery webhook (204) in INV-9b.
+#
+#    docker run --rm --network "container:$(docker compose ps -q app)" -v "$PWD/api.json:/app/api.json:ro" -v "$PWD/schemathesis.toml:/app/schemathesis.toml:ro" schemathesis/schemathesis:4.32.5 --config-file schemathesis.toml run api.json
+
+# The server of command 1. The app Sail serves on port 80 (debug on,
+# database/database.sqlite) is never fuzzed.
+base-url = "http://127.0.0.1:8001/api"
+
+[generation]
+# 500 examples per operation: with the default 100 the linked scenarios
+# (create, then send, then the delivery webhook) seldom reach an invoice that has
+# lines, so a successful send was rare and a webhook 204 never happened.
+max-examples = 500
+
+[checks.positive_data_acceptance]
+# The default list plus 422: the API answers its documented 422 to some data the
+# document accepts, for rules the document cannot express: text that is empty
+# after trimming (Laravel trims strings and turns blank ones into null), a total
+# that overflows, and a send of an invoice without product lines.
+# 422 is accepted for every operation rather than per operation (`[[operations]]`
+# could scope it): show and the webhook document no 422 (`status_code_conformance`
+# already flags one there), and for create a wrong 422 cannot be told from a right one.
+expected-statuses =["2xx", "3xx", "401", "403", "404", "409", "429", "5xx", "422"]
+
+[phases.coverage]
+# Every undeclared method the coverage phase sends by default except QUERY:
+# PHP's built-in server (artisan serve) answers QUERY with 501 before the request
+# reaches Laravel, which would answer 405 behind nginx and php-fpm.
+unexpected-methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "TRACE"]

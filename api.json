@@ -44,6 +44,20 @@
                                     "additionalProperties": false
                                 }
                             }
+                        },
+                        "links": {
+                            "ShowInvoice": {
+                                "operationId": "invoices.show",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            },
+                            "SendInvoice": {
+                                "operationId": "invoices.send",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            }
                         }
                     },
                     "422": {
@@ -185,6 +199,21 @@
                                         "data"
                                     ],
                                     "additionalProperties": false
+                                }
+                            }
+                        },
+                        "links": {
+                            "ShowInvoice": {
+                                "operationId": "invoices.show",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            },
+                            "ReportDelivery": {
+                                "operationId": "notification.hook",
+                                "parameters": {
+                                    "action": "delivered",
+                                    "reference": "$response.body#/data/id"
                                 }
                             }
                         }
@@ -354,6 +383,7 @@
                 "properties": {
                     "customer_name": {
                         "type": "string",
+                        "minLength": 1,
                         "maxLength": 255
                     },
                     "customer_email": {
@@ -368,6 +398,7 @@
                             "properties": {
                                 "name": {
                                     "type": "string",
+                                    "minLength": 1,
                                     "maxLength": 255
                                 },
                                 "quantity": {
