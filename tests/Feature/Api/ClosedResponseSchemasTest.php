@@ -93,7 +93,7 @@ final class ClosedResponseSchemasTest extends TestCase
         }
 
         self::assertSame([], $this->unresolved, 'These $ref values do not resolve inside api.json.');
-        self::assertSame([], $this->allOfs, 'allOf in a response: do not close its branches one by one, close the parent with unevaluatedProperties: false.');
+        self::assertSame([], $this->allOfs, 'allOf in a response is not supported yet: extend ClosedResponseObjectsExtension to set unevaluatedProperties: false on the allOf parent and to close the objects inside its branches, and extend this test to accept it.');
         self::assertSame([], $this->openObjects, 'These response objects have properties but additionalProperties is not false.');
         self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $this->visited);
     }
@@ -123,10 +123,10 @@ final class ClosedResponseSchemasTest extends TestCase
     /**
      * Follows `$ref` (each once), `content.*.schema`, `properties`, `items`,
      * `anyOf`, `oneOf` and a schema-valued `additionalProperties`. An object
-     * with properties is open unless additionalProperties is false. An `allOf`
-     * is not descended into: closing its branches one by one would make them
-     * reject each other's properties, so it is recorded unless the node itself
-     * has `unevaluatedProperties: false`.
+     * with properties is open unless additionalProperties is false. Every
+     * `allOf` is recorded as a failure and not descended into: the extension
+     * does not support it yet (closing its branches one by one would make them
+     * reject each other's properties).
      */
     private function walkSchema(mixed $node, string $path): void
     {
@@ -160,7 +160,7 @@ final class ClosedResponseSchemasTest extends TestCase
             $this->walkSchema($property, $path.'.'.$name);
         }
 
-        if (isset($node['allOf']) && ($node['unevaluatedProperties'] ?? null) !== false) {
+        if (isset($node['allOf'])) {
             $this->allOfs[] = $path;
         }
 

@@ -86,9 +86,7 @@ final class ClosedResponseObjectsExtension extends OperationExtension
                 $this->closeType($property, $visited);
             }
 
-            if ($type->additionalProperties instanceof Type && ! $type->additionalProperties instanceof NoAdditionalProperties) {
-                $this->closeType($type->additionalProperties, $visited);
-            }
+            $this->closeType($type->additionalProperties, $visited);
         }
     }
 }
