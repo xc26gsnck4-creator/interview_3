@@ -87,10 +87,6 @@ final class ClosedResponseSchemasTest extends TestCase
     public function test_every_response_object_in_the_document_is_closed(): void
     {
         $this->document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
-        $this->openObjects = [];
-        $this->unresolved = [];
-        $this->allOfs = [];
-        $this->visited = [];
 
         foreach ($this->responseRoots() as $path => $response) {
             $this->walkSchema($response, $path);
@@ -128,8 +124,9 @@ final class ClosedResponseSchemasTest extends TestCase
      * Follows `$ref` (each once), `content.*.schema`, `properties`, `items`,
      * `anyOf`, `oneOf` and a schema-valued `additionalProperties`. An object
      * with properties is open unless additionalProperties is false. An `allOf`
-     * is only recorded: closing its branches one by one would make them reject
-     * each other's properties.
+     * is not descended into: closing its branches one by one would make them
+     * reject each other's properties, so it is recorded unless the node itself
+     * has `unevaluatedProperties: false`.
      */
     private function walkSchema(mixed $node, string $path): void
     {
@@ -163,7 +160,7 @@ final class ClosedResponseSchemasTest extends TestCase
             $this->walkSchema($property, $path.'.'.$name);
         }
 
-        if (isset($node['allOf'])) {
+        if (isset($node['allOf']) && ($node['unevaluatedProperties'] ?? null) !== false) {
             $this->allOfs[] = $path;
         }
 
