@@ -1,18 +1,30 @@
-# Schemathesis settings for fuzz-api.sh, which runs the pinned
-# schemathesis/schemathesis:4.32.5 image against the committed api.json.
-# Every check and every phase stays on; the settings below are the exceptions.
+# Schemathesis settings for fuzzing the API against the committed api.json with
+# the pinned schemathesis/schemathesis:4.32.5 image. Every check and every phase
+# stays on; the settings below are the exceptions.
+#
+# Run from the project root with Sail up, in two terminals:
+#
+# 1. The server (stop it with Ctrl+C): a second `artisan serve` in the app
+#    container, debug off, on a throwaway SQLite file in /tmp, logging to stderr.
+#    Without --no-reload, ServeCommand hands its php -S workers a blanked environment, so they re-read .env (debug on, writes to database/database.sqlite).
+#    A cached config (bootstrap/cache/config.php) would make the server ignore these variables: run `vendor/bin/sail artisan config:clear` first.
+#
+#    vendor/bin/sail bash -c 'export DB_DATABASE=/tmp/fuzz-api.sqlite && rm -f "$DB_DATABASE"* && touch "$DB_DATABASE" && php artisan migrate --force && APP_DEBUG=false LOG_CHANNEL=stderr exec php artisan serve --host=127.0.0.1 --port=8001 --no-reload'
+#
+# 2. The fuzzer, in the app container's network, so port 8001 is never
+#    published. It runs in the image's working directory, /app, which is
+#    writable: .hypothesis/ and the coverage report go there and are removed with
+#    the container. To replay a failure, append --seed <seed> (Schemathesis
+#    prints the seed), after restarting the server for a fresh database.
+#
+#    docker run --rm --network "container:$(docker compose ps -q app)" -v "$PWD/api.json:/app/api.json:ro" -v "$PWD/schemathesis.toml:/app/schemathesis.toml:ro" schemathesis/schemathesis:4.32.5 --config-file schemathesis.toml run api.json
 
-# The second, debug-off server that fuzz-api.sh starts inside the app container
-# on a throwaway SQLite database. The fuzzer shares the container's network, so
-# the port is never published, and the app Sail serves on port 80 (debug on,
+# The server of command 1. The app Sail serves on port 80 (debug on,
 # database/database.sqlite) is never fuzzed.
 base-url = "http://127.0.0.1:8001/api"
 
-# The fixed seed of the script's first run, picked because its run is clean and
-# reaches a send 200 and a webhook 204, which the script's coverage guard
-# requires. The second run draws a random seed and passes it as --seed; to replay
-# that run, pass its seed to the script (./fuzz-api.sh <seed>), which still runs
-# this fixed seed first, so this file is not edited to replay.
+# Fixed, so a run repeats; seed 1 was picked because its run is clean and
+# reaches a send 200 and a webhook 204.
 seed = 1
 
 [generation]
