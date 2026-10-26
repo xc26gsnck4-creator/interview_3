@@ -2,7 +2,9 @@
 #
 # Fuzzes the API with Schemathesis against the committed OpenAPI document
 # (api.json), with the settings in schemathesis.toml. Run it on the host with
-# Sail up: ./fuzz-api.sh (it needs Docker, so it cannot run inside Sail).
+# Sail up (it needs Docker, so it cannot run inside Sail):
+#
+#   ./fuzz-api.sh [seed]
 #
 # Why a second server: the app Sail serves on port 80 runs with APP_DEBUG=true
 # on database/database.sqlite. Its debug error bodies break the document's
@@ -15,15 +17,21 @@
 # Two runs, both always: the config's fixed seed, whose report must show at
 # least one send 200 and one webhook 204 (the coverage guard: without them the
 # send endpoint and the webhook were only ever fuzzed into a 404), then a random
-# seed, printed so a failure can be replayed by putting it in schemathesis.toml.
-# The NDJSON reports and the server's log stay in a temporary directory whose
-# path is printed. On every exit, Ctrl+C included, the server's process group is
-# killed and its files are deleted.
+# seed. The optional argument, a non-negative integer, replaces only that random
+# seed, to replay a run: the fixed run and its guard still go first, so the
+# replayed run follows the same fixed run on a fresh database, as the original
+# did. The summary prints the replay command. The NDJSON reports and the
+# server's log stay in a temporary directory whose path is printed. On every
+# exit, Ctrl+C included, the server's process group is killed and its files are
+# deleted.
 #
-# Exit codes: 0 both runs passed and the guard held; 1 a run found a failure or
-# the guard failed; 2 the setup failed (app container down, port 8001 taken,
-# cached configuration, server not starting) or Schemathesis could not run;
-# 128 + the signal number when interrupted (130 for Ctrl+C).
+# Exit codes: 0 both runs passed and the guard held; 1 a run failed (a check
+# failed or a case errored) or the guard failed; 2 the argument is not a single
+# non-negative integer, the setup failed (app container down, port 8001 taken,
+# cached configuration, server not starting), Schemathesis could not run, the
+# guard could not read the report, or the server could not be stopped (when
+# nothing else failed); 128 + the signal number when interrupted (130 for
+# Ctrl+C).
 
 set -euo pipefail
 
@@ -48,6 +56,17 @@ fail_setup() {
     exit 2
 }
 
+usage="usage: ./fuzz-api.sh [seed], where seed is a non-negative integer that replaces the random run's drawn seed (to replay that run)"
+given_seed=''
+if (($# > 1)); then
+    fail_setup "$usage"
+elif (($# == 1)); then
+    if [[ ! $1 =~ ^[0-9]+$ ]]; then
+        fail_setup "$usage"
+    fi
+    given_seed=$1
+fi
+
 if [[ -f bootstrap/cache/config.php ]]; then
     fail_setup "the configuration is cached, so the second server would ignore its APP_DEBUG and DB_DATABASE and write to database/database.sqlite. Clear it first: vendor/bin/sail artisan config:clear"
 fi
@@ -68,10 +87,16 @@ if [[ -z "$fixed_seed" ]]; then
     fail_setup "schemathesis.toml sets no seed for the fixed run"
 fi
 
-random_seed="$(((RANDOM << 15) | RANDOM))"
-while [[ "$random_seed" == "$fixed_seed" ]]; do
+if [[ -n "$given_seed" ]]; then
+    random_seed="$given_seed"
+    random_run="seed $random_seed from the command line"
+else
     random_seed="$(((RANDOM << 15) | RANDOM))"
-done
+    while [[ "$random_seed" == "$fixed_seed" ]]; do
+        random_seed="$(((RANDOM << 15) | RANDOM))"
+    done
+    random_run="random seed $random_seed"
+fi
 
 tmp_root="${TMPDIR:-/tmp}"
 reports="$(mktemp -d "${tmp_root%/}/fuzz-api.XXXXXX")"
@@ -81,6 +106,7 @@ server_requested=false
 fixed_result='not run'
 random_result='not run'
 guard_result='not checked'
+guard_hint=''
 
 # Stops the server and deletes its files inside the app container. It takes the
 # start's lock first: a Ctrl+C on the host does not stop a command already
@@ -89,7 +115,7 @@ guard_result='not checked'
 stop_server() {
     vendor/bin/sail bash -s -- "$container_files" <<'CONTAINER'
 set -uo pipefail
-files=$1
+files=${1:?}
 status=0
 exec 9>"$files.lock"
 if ! flock -w 60 9; then
@@ -124,7 +150,13 @@ CONTAINER
 
 print_summary() {
     say "fixed seed $fixed_seed: $fixed_result; coverage guard: $guard_result"
-    say "random seed $random_seed: $random_result"
+    if [[ -n "$guard_hint" ]]; then
+        say "$guard_hint"
+    fi
+    say "$random_run: $random_result"
+    if [[ "$random_result" != 'not run' ]]; then
+        say "to replay that run: ./fuzz-api.sh $random_seed"
+    fi
     say "reports and the server log: $reports"
 }
 
@@ -158,11 +190,12 @@ trap 'exit 129' HUP
 
 # Takes the lock, checks the port, migrates the throwaway database, starts the
 # server in a new session (its process group id lands in the .pid file) and
-# waits until it accepts connections. Exit 3: the port is taken; 4: no answer.
+# waits until it accepts connections. Exit 3: the port is taken; 4: no answer
+# within 20 s; any other: the migration failed or the server exited at start.
 start_server() {
     vendor/bin/sail bash -s -- "$container_files" "$port" <<'CONTAINER'
 set -euo pipefail
-files=$1
+files=${1:?}
 port=$2
 exec 9>"$files.lock"
 flock 9
@@ -174,6 +207,12 @@ if ! output=$(DB_DATABASE="$files.sqlite" php artisan migrate --force --no-inter
     printf '%s\n' "$output" >&2
     exit 1
 fi
+# --no-reload keeps the environment set here: without it,
+# ServeCommand::startProcess() sets every $_ENV key outside its
+# $passthroughVariables to false (unset) for the php -S workers, and with
+# Sail's php.ini (variables_order = EGPCS) $_ENV holds APP_DEBUG, DB_DATABASE
+# and LOG_CHANNEL, so the workers would read .env again: debug on, and writes
+# to database/database.sqlite.
 APP_DEBUG=false DB_DATABASE="$files.sqlite" LOG_CHANNEL=stderr \
     setsid -f sh -c 'echo "$$" >"$1"; shift; exec "$@"' sh "$files.pid" \
     php artisan serve --host=127.0.0.1 --port="$port" --no-reload \
@@ -181,6 +220,11 @@ APP_DEBUG=false DB_DATABASE="$files.sqlite" LOG_CHANNEL=stderr \
 for _ in $(seq 200); do
     if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
         exit 0
+    fi
+    # The server's process group is gone: it exited at start, so waiting longer
+    # could only end in an answer from another server.
+    if [[ -s "$files.pid" ]] && ! kill -0 -- -"$(<"$files.pid")" 2>/dev/null; then
+        exit 1
     fi
     sleep 0.1
 done
@@ -202,10 +246,13 @@ esac
 
 # Runs Schemathesis with the config; $1 names the run and its report, the rest
 # goes after `run`. Prints nothing itself; returns Schemathesis's exit code.
+# --init: Schemathesis is not PID 1, so a SIGTERM or SIGHUP the Docker client
+# passes on stops it (PID 1 without a handler ignores them) and the cleanup
+# need not wait for the run to end.
 fuzz() {
     local name=$1
     shift
-    docker run --rm --name "fuzz-api-${run_id}-${name}" \
+    docker run --rm --init --name "fuzz-api-${run_id}-${name}" \
         --network "container:${app_container}" \
         -v "$PWD/api.json:/schema/api.json:ro" \
         -v "$PWD/schemathesis.toml:/config/schemathesis.toml:ro" \
@@ -217,9 +264,10 @@ fuzz() {
 
 # Prints "<send 200 count> <webhook 204 count>" for the NDJSON report $1. Every
 # request the run sent is recorded once, under the ScenarioFinished event of its
-# scenario, keyed by test case id.
+# scenario, keyed by test case id. It only reads the report, so it gets no
+# network.
 count_guard_responses() {
-    docker run --rm -i --entrypoint python -v "$reports:/reports:ro" "$image" -I - "/reports/$1" <<'PYTHON'
+    docker run --rm -i --init --network none --entrypoint python -v "$reports:/reports:ro" "$image" -I - "/reports/$1" <<'PYTHON'
 import json
 import sys
 from urllib.parse import urlsplit
@@ -249,12 +297,13 @@ print(send_ok, webhook_ok)
 PYTHON
 }
 
-# Schemathesis exits 0 when every check passed, 1 when one failed and 2 when it
-# could not run; anything else (a Docker error) counts as could not run.
+# Schemathesis exits 0 when every check passed, 1 when a check failed or a case
+# errored and 2 when it could not run; anything else (a Docker error) counts as
+# could not run.
 describe_run() {
     case "$1" in
         0) echo 'passed (exit 0)' ;;
-        1) echo 'FAILED, a check found a failure (exit 1)' ;;
+        1) echo 'FAILED, a check failed or a case errored (exit 1)' ;;
         *) echo "FAILED, Schemathesis could not run (exit $1)" ;;
     esac
 }
@@ -281,11 +330,15 @@ else
     else
         guard_status=1
         guard_result="FAILED (send 200 x$send_ok, webhook 204 x$webhook_ok; each must be at least 1)"
+        guard_hint="likely cause: the links in api.json no longer lead to a send or the webhook (fix them), or api.json changed and seed $fixed_seed no longer reaches them (pick a new seed in schemathesis.toml: try 1, 3, 6, 8, then upwards, and keep the first clean run that passes the guard)"
     fi
 fi
 say "coverage guard: $guard_result"
+if [[ -n "$guard_hint" ]]; then
+    say "$guard_hint"
+fi
 
-say "run 2 of 2: random seed $random_seed"
+say "run 2 of 2: $random_run"
 random_result='interrupted'
 random_status=0
 fuzz random-seed --seed "$random_seed" || random_status=$?

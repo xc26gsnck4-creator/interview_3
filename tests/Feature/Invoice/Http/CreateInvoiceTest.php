@@ -258,6 +258,22 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
+    /**
+     * A name that fits once trimmed fails only the check of the input as sent,
+     * which adds the failure under the studly rule name 'Max', so the client
+     * gets the rule's own string message.
+     */
+    public function test_reports_the_max_message_for_a_name_over_the_limit_as_sent(): void
+    {
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'customer_name' => "\t".str_repeat('n', 255)]);
+
+        $response->assertUnprocessable();
+        self::assertSame([
+            'customer_name' => ['The customer name field must not be greater than 255 characters.'],
+        ], $response->json('errors'));
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_ignores_status_in_payload(): void
     {
         $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'status' => 'sent-to-client']);
@@ -478,7 +494,8 @@ final class CreateInvoiceTest extends TestCase
 
     /**
      * A well-formed address the `email` rule accepts on its own, so only the
-     * length limit decides. Needs a length of at least 252.
+     * length limit decides. Needs a length of at least 249: the local part is
+     * `$length - 248` characters.
      */
     private static function validEmailOfLength(int $length): string
     {

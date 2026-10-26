@@ -53,8 +53,10 @@ final class CreateInvoiceRequest extends FormRequest
      * Amounts must be JSON integers (`integer:strict` rejects true, "2" and 1.0)
      * within the line invariant's range, so input the domain would reject is a
      * 422 here rather than a 500. A blank name is null by the time it is
-     * validated (the global TrimStrings and ConvertEmptyStringsToNull middleware).
-     * `list` implies `array`; `array` is there for the API document, where
+     * validated (the global TrimStrings and ConvertEmptyStringsToNull middleware),
+     * so `min:1` is there for the API document only (`minLength: 1`): at runtime
+     * `required` plus the trimming middleware already reject an empty or blank
+     * name. `list` implies `array`; `array` is there for the API document, where
      * Scramble applies the line cap (maxItems) only to a known array type. A line
      * that is not an object fails its field rules, so `product_lines.*` needs no
      * rule of its own (one would make validated() scan every rule key once per
