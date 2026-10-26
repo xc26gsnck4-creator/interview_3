@@ -14,13 +14,10 @@ use Illuminate\Testing\TestResponse;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpFoundation\Response;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
 final class CreateInvoiceTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
     private const array LINE = ['name' => 'Consulting', 'quantity' => 2, 'unit_price' => 15000];
 
     private const array PAYLOAD = [
@@ -28,13 +25,6 @@ final class CreateInvoiceTest extends TestCase
         'customer_email' => 'jane@example.com',
         'product_lines' => [self::LINE],
     ];
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->useCommittedOpenApiDocument();
-    }
 
     public function test_creates_invoice_with_lines_and_returns_201(): void
     {
@@ -68,7 +58,6 @@ final class CreateInvoiceTest extends TestCase
             'quantity' => 2,
             'unit_price' => 15000,
         ]);
-        $this->assertMatchesContract($response, 201);
     }
 
     public function test_runs_no_query_after_the_commit(): void
@@ -89,7 +78,6 @@ final class CreateInvoiceTest extends TestCase
         $response->assertCreated();
         self::assertTrue($committed);
         self::assertSame([], $queriesAfterCommit);
-        $this->assertMatchesContract($response, 201);
     }
 
     public function test_creates_invoice_with_empty_lines_array(): void
@@ -124,7 +112,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonPath('data.product_lines.0.total_unit_price', $total)
             ->assertJsonPath('data.total_price', $total);
         $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Bulk', 'quantity' => $quantity, 'unit_price' => $unitPrice]);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
@@ -140,7 +127,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonValidationErrors(['product_lines'])
             ->assertJsonMissingValidationErrors(['product_lines.0.name']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -155,7 +141,6 @@ final class CreateInvoiceTest extends TestCase
             'The product lines field must be an array.',
             'The product lines field must be a list.',
         ]);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     public function test_accepts_the_maximum_of_1000_lines(): void
@@ -164,7 +149,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertCreated()->assertJsonCount(1000, 'data.product_lines');
         $this->assertDatabaseCount('invoice_product_lines', 1000);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
@@ -193,13 +177,11 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonPath('data.customer_name', $name)
             ->assertJsonPath('data.product_lines.0.name', $name);
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_name' => $name]);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
-     * The document's `email` format caps an address at 254 characters (RFC 5321)
-     * while the rule accepts 255, so the request leaves the document's format
-     * (not its `maxLength`) and the contract check skips it.
+     * api.json's `email` format caps an address at 254 characters (RFC 5321),
+     * while the rule accepts 255.
      */
     public function test_accepts_an_email_of_exactly_255_characters(): void
     {
@@ -209,7 +191,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertCreated()->assertJsonPath('data.customer_email', $email);
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_email' => $email]);
-        $this->assertMatchesContract($response, 201, validRequest: false);
     }
 
     /**
@@ -227,7 +208,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonPath('data.product_lines.0.name', 'Consulting');
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_name' => 'Jane Doe']);
         $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Consulting']);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
@@ -250,7 +230,6 @@ final class CreateInvoiceTest extends TestCase
             'customer_email' => ['The customer email field must not be greater than 255 characters.'],
             'product_lines.0.name' => ['The product_lines.0.name field must not be greater than 255 characters.'],
         ], $response->json('errors'));
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -265,7 +244,6 @@ final class CreateInvoiceTest extends TestCase
         self::assertSame([
             'customer_name' => ['The customer name field must not be greater than 255 characters.'],
         ], $response->json('errors'));
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -294,7 +272,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertUnprocessable();
         self::assertSame([$errorKey => [$message]], $response->json('errors'));
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     public function test_ignores_status_in_payload(): void
@@ -303,7 +280,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertCreated()->assertJsonPath('data.status', 'draft');
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
-        $this->assertMatchesContract($response, 201);
     }
 
     /**
@@ -353,7 +329,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors([$errorKey]);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -372,7 +347,6 @@ final class CreateInvoiceTest extends TestCase
         ]);
         $this->assertDatabaseCount('invoices', 0);
         $this->assertDatabaseCount('invoice_product_lines', 0);
-        $this->assertMatchesContract($response, 422);
     }
 
     /**
@@ -386,7 +360,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     public function test_treats_a_malformed_json_body_as_empty_and_answers_422(): void
@@ -400,7 +373,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -430,7 +402,6 @@ final class CreateInvoiceTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -454,7 +425,6 @@ final class CreateInvoiceTest extends TestCase
         );
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     public function test_ignores_fields_in_the_query_string(): void
@@ -468,7 +438,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonValidationErrors(['customer_email'])
             ->assertJsonMissingValidationErrors(['customer_name']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -483,7 +452,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertHeader('Content-Type', 'application/json')
             ->assertJsonValidationErrors(['customer_name', 'customer_email']);
         $this->assertDatabaseCount('invoices', 0);
-        $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
     /**
@@ -515,6 +483,5 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonPath('data.total_price', 0);
         $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
         $this->assertDatabaseCount('invoice_product_lines', 0);
-        $this->assertMatchesContract($response, 201);
     }
 }

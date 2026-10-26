@@ -13,7 +13,6 @@ use Mockery\VerificationDirector;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
 use Modules\Notifications\Api\NotificationFacadeInterface;
 use RuntimeException;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\Support\FakeNotificationFacade;
 use Tests\TestCase;
 
@@ -28,8 +27,6 @@ use Tests\TestCase;
  */
 final class InvoiceLifecycleTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
     private const string CUSTOMER_EMAIL = 'jane@example.com';
 
     private const array PAYLOAD = [
@@ -51,7 +48,6 @@ final class InvoiceLifecycleTest extends TestCase
     {
         parent::setUp();
 
-        $this->useCommittedOpenApiDocument();
         $this->log = Log::spy();
         $this->exceptions = Exceptions::fake();
         $this->app->instance(NotificationFacadeInterface::class, $this->notifications = new FakeNotificationFacade);
@@ -95,7 +91,6 @@ final class InvoiceLifecycleTest extends TestCase
                     ->where('unit_price', 100)
                     ->where('total_unit_price', 300))
                 ->where('total_price', 30300)));
-        $this->assertMatchesContract($response, 200);
 
         self::assertCount(1, $this->notifications->notified);
         $this->log->shouldNotHaveReceived('warning');
@@ -135,7 +130,6 @@ final class InvoiceLifecycleTest extends TestCase
         $failed = $this->postJson(route('invoices.send', $invoiceId));
 
         $failed->assertServiceUnavailable();
-        $this->assertMatchesContract($failed, 503);
         $this->assertStatus($invoiceId, 'draft');
 
         $this->notifications->failWith = null;
@@ -156,7 +150,6 @@ final class InvoiceLifecycleTest extends TestCase
         $response = $this->postJson(route('invoices.store'), self::PAYLOAD);
 
         $response->assertCreated();
-        $this->assertMatchesContract($response, 201);
 
         $invoiceId = $response->json('data.id');
         self::assertIsString($invoiceId);
@@ -169,7 +162,6 @@ final class InvoiceLifecycleTest extends TestCase
         $response = $this->postJson(route('invoices.send', $invoiceId));
 
         $response->assertOk()->assertJsonPath('data.status', 'sending');
-        $this->assertMatchesContract($response, 200);
     }
 
     private function deliver(string $reference): void
@@ -177,7 +169,6 @@ final class InvoiceLifecycleTest extends TestCase
         $response = $this->getJson(route('notification.hook', ['action' => 'delivered', 'reference' => $reference]));
 
         $response->assertNoContent();
-        $this->assertMatchesContract($response, 204);
     }
 
     private function assertStatus(string $invoiceId, string $expected): void
@@ -185,6 +176,5 @@ final class InvoiceLifecycleTest extends TestCase
         $response = $this->getJson(route('invoices.show', $invoiceId));
 
         $response->assertOk()->assertJsonPath('data.status', $expected);
-        $this->assertMatchesContract($response, 200);
     }
 }

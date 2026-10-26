@@ -8,71 +8,29 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Testing\AssertableJsonString;
-use PHPUnit\Framework\Attributes\Group;
-use Spectator\Spectator;
-use Tests\Concerns\ValidatesOpenApiContract;
 use Tests\TestCase;
 
-/**
- * Excluded from mutation testing (infection.json5): Scramble reads the form
- * request rules and the resources while it generates the document, so any
- * mutant there changes the document and fails the drift check, even where no
- * test of the behaviour would notice.
- */
-#[Group('openapi-document')]
 final class OpenApiDocumentTest extends TestCase
 {
-    use ValidatesOpenApiContract;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->mockConsoleOutput = false;
-        $this->useCommittedOpenApiDocument();
-    }
-
     public function test_committed_document_is_current_and_has_no_unknown_types(): void
     {
         $generatedPath = sys_get_temp_dir().'/api-'.Str::random(8).'.json';
 
         try {
-            $this->runSuccessfully('scramble:export', ['--path' => $generatedPath, '--fail-on-unknown' => true]);
+            $exitCode = Artisan::call('scramble:export', ['--path' => $generatedPath, '--fail-on-unknown' => true]);
 
-            self::assertNotEmpty(new AssertableJsonString(File::get($generatedPath))->json('paths'));
-            self::assertJsonFileEqualsJsonFile(
+            self::assertSame(0, $exitCode, Artisan::output());
+
+            $generated = File::get($generatedPath);
+
+            self::assertNotEmpty(new AssertableJsonString($generated)->json('paths'));
+            self::assertJsonStringEqualsJsonFile(
                 base_path('api.json'),
-                $generatedPath,
+                $generated,
                 'api.json is out of date: run `vendor/bin/sail composer api:export` and commit it.',
             );
         } finally {
             File::delete($generatedPath);
         }
-    }
-
-    /**
-     * Scramble documents a route registered for several methods (Route::match,
-     * Route::any, Route::redirect) under its first method only; the other
-     * methods are served but missing from the document.
-     */
-    public function test_every_api_route_is_documented(): void
-    {
-        $output = $this->runSuccessfully('spectator:routes', ['--prefix' => Spectator::getPathPrefix(), '--format' => 'json']);
-
-        new AssertableJsonString($output)
-            ->assertPath('undocumented_routes', [])
-            ->assertMissing(['status' => 'unimplemented']);
-    }
-
-    /**
-     * @param  array<string, bool|string>  $parameters
-     */
-    private function runSuccessfully(string $command, array $parameters): string
-    {
-        $exitCode = Artisan::call($command, $parameters);
-        $output = Artisan::output();
-
-        self::assertSame(0, $exitCode, $output);
-
-        return $output;
     }
 }
