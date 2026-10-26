@@ -10,13 +10,60 @@ use PHPat\Test\Builder\BuildStep;
 use PHPat\Test\PHPat;
 
 /**
- * Structural rules for the Invoices module, run by PHPStan through phpat (a
- * `phpat.test` service in phpstan.neon), not by PHPUnit. Deptrac owns the
- * layer and module map (deptrac.yaml). The Notifications module is the task's
- * own code and stays unchecked.
+ * Structural rules and the layer and module map of the Invoices module, run by
+ * PHPStan through phpat (a `phpat.test` service in phpstan.neon), not by
+ * PHPUnit. Presentation and Infrastructure depend on Application, Application
+ * on Domain, and Invoices reaches Notifications only through its Api. The
+ * Notifications module is the task's own code and stays unchecked.
  */
 final class InvoicesArchitectureRules
 {
+    public function test_only_infrastructure_depends_on_infrastructure(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules\Invoices'))
+            ->excluding(Selector::inNamespace('Modules\Invoices\Infrastructure'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Invoices\Infrastructure'))
+            ->because('Infrastructure wires the module; the inner layers do not know it');
+    }
+
+    public function test_only_presentation_depends_on_presentation(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules\Invoices'))
+            ->excluding(Selector::inNamespace('Modules\Invoices\Presentation'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules\Invoices\Presentation'))
+            ->because('HTTP is the outermost layer');
+    }
+
+    public function test_invoices_reach_notifications_only_through_its_api(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules\Invoices'))
+            ->shouldNot()->dependOn()->classes(
+                Selector::inNamespace('Modules\Notifications\Application'),
+                Selector::inNamespace('Modules\Notifications\Infrastructure'),
+                Selector::inNamespace('Modules\Notifications\Presentation'),
+            )
+            ->because('Api is the contract the Notifications module offers');
+    }
+
+    public function test_modules_do_not_depend_on_app(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('Modules'), Selector::inNamespace('Database\Factories'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('App'))
+            ->because('app/ holds framework glue the modules must not rely on');
+    }
+
+    public function test_app_does_not_depend_on_the_modules(): BuildStep
+    {
+        return PHPat::rule()
+            ->classes(Selector::inNamespace('App'))
+            ->shouldNot()->dependOn()->classes(Selector::inNamespace('Modules'))
+            ->because('app/ holds framework glue that names no module');
+    }
+
     public function test_invoices_classes_are_final(): BuildStep
     {
         return PHPat::rule()

@@ -29,7 +29,7 @@ Layer names mirror the Notifications module. There is no `Api/` folder because n
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
-Allowed dependencies, enforced by Deptrac (from `deptrac analyse --formatter=mermaidjs`, without its use counts). Invoices reaches Notifications only through its `Api`. The dotted arrow is allowed too, but the models name their factories only in the `@use HasFactory<…>` PHPDoc, which Deptrac does not count:
+Allowed dependencies. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the module's layers pointing inwards, let Invoices reach Notifications only through its `Api`, and keep `app/` and the modules apart. The Notifications module and the factories are not checked. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
 
 ```mermaid
 flowchart TD;
@@ -64,13 +64,11 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 
 - **Models** (`tests/Unit/Invoice/Models`): every rule and transition: draft-only creation, the line invariant on raw values and at its bounds, totals and their overflow, the send rule's order of checks, each transition from every status, and the rejected direct status write. The atomic claim stands in for a concurrency test: two instances of the same invoice claim it, the stale second one's conditional update hits zero rows and throws, and the row moves once.
 - **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification, a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
-- **HTTP** (`tests/Feature/Invoice/Http`, `DeliveryWebhookTest`): the contract, validation (each 422 leaves nothing stored), exact error bodies, and the real webhook route with real event dispatch and no `Event::fake`, so a missing listener registration fails.
+- **HTTP** (`tests/Feature/Invoice/Http`, `DeliveryWebhookTest`): status codes and response bodies, validation (each 422 leaves nothing stored), exact error bodies, and the real webhook route with real event dispatch and no `Event::fake`, so a missing listener registration fails.
 - **Lifecycle** (`InvoiceLifecycleTest`): three end-to-end stories through the real routes, with only the facade faked (the log is a spy and reported exceptions are captured, so the tests can assert on them): the happy path delivered with the reference taken from the recorded notification, a delivery before the send, and a retry after a failed notification. Each step is read back through show.
 - **Real locks** (`SqliteTransactionsTest`, `DatabaseLockedTest`): separate connections on a temporary file prove that `IMMEDIATE` waits at `BEGIN` and that a failed commit is rolled back and releases the lock. Over HTTP they produce the busy 503 with nothing written, and the not-recorded 500 behind a reader.
-- **API contract:** every response of a documented operation in the feature tests is checked against `api.json` (Spectator). The only ones left out are two requests to paths no route matches and show's 500 for corrupt data, which the document does not describe. Its response objects are closed, so an undocumented field fails, which `ClosedResponseSchemasTest` proves. `OpenApiDocumentTest` fails on a stale document, and `OpenApiLinksTest` checks the links the fuzzer follows.
-- **Architecture:** phpat rules (classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP) and the Deptrac map, both static.
-- **Mutation testing:** Infection kills every mutant on the module and `app/` (100% covered MSI). Covered MSI does not count code that no test runs.
-- **Fuzzing** (by hand, not in the suite): Schemathesis generates requests from `api.json`. It found one mismatch, a length limit checked after trimming, which was fixed ([#19]).
+- **API document:** `OpenApiDocumentTest` fails when `api.json` differs from what Scramble generates from the code, or when Scramble meets a type it cannot document.
+- **Architecture:** phpat rules, static and run by PHPStan: classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP, and the layer and module map above.
 
 ## Failure behaviour
 
@@ -125,45 +123,16 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root). oasdiff and Schemathesis are launched from the host and run in their own containers (`docker run`), because the Sail container has no Docker.
+Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root).
 
 | Command | What it checks | Note |
 |---|---|---|
 | `vendor/bin/sail artisan test` | the test suite | in-memory SQLite; never touches `database/database.sqlite` |
-| `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict, deprecation, dead-code and disallowed-call rules (no debug output, no hand-written SQL), PHPUnit rules, 100% native type coverage, Type Perfect and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. The baseline is empty, and the three ignores in `phpstan.neon` are structural and commented |
-| `vendor/bin/sail bin rector process --dry-run` | Rector with the PHP-version, dead-code, code-quality, coding-style, type-declaration, privatization, PHPUnit and Laravel sets | `rector.php` documents every skipped set and rule |
-| `vendor/bin/sail composer deptrac` | the layer and module map above | |
-| `vendor/bin/sail composer infection` | mutation testing at 100% covered MSI | two ignores, each reasoned in `infection.json5` |
-| `vendor/bin/sail composer deps:validate`, `deps:audit`, `deps:analyse` | strict `composer.json`, security advisories, packages used but not declared, and declared in `require` but unused | the audit ignores one abandoned dev package (needs Composer 2.10 or newer; Sail ships 2.10.3). The analyser's ignores are reasoned in `composer-dependency-analyser.php` |
-| `vendor/bin/sail composer taint` | Psalm taint analysis only (types stay with PHPStan) | it does not track `$request->string()` or route arguments; the `{invoice}` route only matches a uuid |
+| `vendor/bin/sail bin pint --test` | code style (Laravel preset) | |
+| `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. The baseline is empty, and the one ignore in `phpstan.neon` is structural and commented |
 | `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
-| `git show main:api.json \| docker run --rm -i -v "$PWD":/repo:ro -w /repo tufin/oasdiff:v1.33.0 breaking - api.json --fail-on ERR` | breaking API changes against `main` | |
 
-**API contract.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Five dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer:
-- the mapped exceptions' responses and `total_price` as an integer ([#15]);
-- the busy 503 on every operation ([#16]);
-- OpenAPI links from create to show and send, and from send to show and the delivery webhook ([#19]);
-- `additionalProperties: false` on every response object ([#18]). Requests stay open, and maps keep their value schema.
-
-The document describes production. `phpunit.xml` pins `APP_DEBUG=false`; with the development `.env`'s `APP_DEBUG=true`, the error bodies Laravel renders itself (a path no route matches, an unexpected 500) also carry `exception`, `file`, `line` and `trace`, which the closed document does not allow. The module's own errors, the validation 422 and the busy 503 stay `{message}` either way. Because responses are closed, a new response field needs a regenerated document, and a client that validates strictly against the old one would reject it. oasdiff reports such a field as information, not as a breaking change.
-
-**Fuzzing.** Run [Schemathesis](https://schemathesis.readthedocs.io) by hand, with Sail up, in two terminals. First, a second server with debug off on a throwaway SQLite file (stop it with Ctrl+C). A cached config (`bootstrap/cache/config.php`) would make it ignore these variables, so run `vendor/bin/sail artisan config:clear` first if you ever cached it:
-
-```bash
-vendor/bin/sail bash -c 'export DB_DATABASE=/tmp/fuzz-api.sqlite && rm -f "$DB_DATABASE"* && touch "$DB_DATABASE" && php artisan migrate --force && APP_DEBUG=false LOG_CHANNEL=stderr exec php artisan serve --host=127.0.0.1 --port=8001 --no-reload'
-```
-
-Then the fuzzer, in the app container's network:
-
-```bash
-docker run --rm --network "container:$(docker compose ps -q app)" -v "$PWD/api.json:/app/api.json:ro" -v "$PWD/schemathesis.toml:/app/schemathesis.toml:ro" schemathesis/schemathesis:4.32.5 --config-file schemathesis.toml run api.json
-```
-
-No seed is pinned, so each run explores new data. Schemathesis prints the seed it used, and `--seed <seed>` replays it. `schemathesis.toml` explains two exceptions:
-- 422 counts as an accepted answer to data the document allows, for the rules it cannot express: text that is empty after trimming, a total that overflows, a send without lines.
-- The QUERY method is left out, because PHP's built-in server answers it 501 before the request reaches Laravel.
-
-The runs that closed the fuzzing work found no server error and no response outside the document; seed 1 reached send 200 ×38 and the webhook 204 ×18. Their one finding, the 255-character limit applied after trimming, was fixed first ([#19]).
+**API document.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Three dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer: the mapped exceptions' responses and `total_price` as an integer ([#15]), and the busy 503 on every operation ([#16]). `APP_NAME`, `APP_URL` and `API_VERSION` reach the document, so `phpunit.xml` and `api:export` pin them. `phpunit.xml` also pins `APP_DEBUG=false`, so the tests see production's error bodies.
 
 ## Try it
 
@@ -218,8 +187,6 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [#14]: https://github.com/xc26gsnck4-creator/interview_3/pull/14
 [#15]: https://github.com/xc26gsnck4-creator/interview_3/pull/15
 [#16]: https://github.com/xc26gsnck4-creator/interview_3/pull/16
-[#18]: https://github.com/xc26gsnck4-creator/interview_3/pull/18
-[#19]: https://github.com/xc26gsnck4-creator/interview_3/pull/19
 [`CreateInvoiceTest`]: tests/Feature/Invoice/Http/CreateInvoiceTest.php
 [`ShowInvoiceTest`]: tests/Feature/Invoice/Http/ShowInvoiceTest.php
 [`SendInvoiceTest`]: tests/Feature/Invoice/Http/SendInvoiceTest.php

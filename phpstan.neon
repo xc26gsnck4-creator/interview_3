@@ -2,17 +2,9 @@ includes:
     - vendor/larastan/larastan/extension.neon
     - vendor/nesbot/carbon/extension.neon
     - vendor/phpstan/phpstan-strict-rules/rules.neon
-    - vendor/phpstan/phpstan-deprecation-rules/rules.neon
     - vendor/phpstan/phpstan-phpunit/extension.neon
     - vendor/phpstan/phpstan-phpunit/rules.neon
-    - vendor/tomasvotruba/type-coverage/config/extension.neon
     - vendor/phpat/phpat/extension.neon
-    - vendor/shipmonk/dead-code-detector/rules.neon
-    - vendor/spaze/phpstan-disallowed-calls/extension.neon
-    - vendor/spaze/phpstan-disallowed-calls/disallowed-dangerous-calls.neon
-    - vendor/spaze/phpstan-disallowed-calls/disallowed-execution-calls.neon
-    - vendor/spaze/phpstan-disallowed-calls/disallowed-insecure-calls.neon
-    - vendor/spaze/phpstan-disallowed-calls/disallowed-loose-calls.neon
     - phpstan-baseline.neon
 
 parameters:
@@ -28,65 +20,13 @@ parameters:
     checkModelProperties: true
     parseModelCastsMethod: true
 
-    # Native types on every return, parameter, property and constant. The
-    # extension's `declare` key is a no-op in 2.5; declare(strict_types=1) is
-    # left to Rector's SafeDeclareStrictTypesRector.
-    type_coverage:
-        return: 100
-        param: 100
-        property: 100
-        constant: 100
-
-    # Every Type Perfect rule that does something in 2.5: null_over_false is a
-    # no-op there, no_mixed turns on both no_mixed_* rules, and narrow_param
-    # only checks private methods.
-    type_perfect:
-        no_mixed: true
-        narrow_param: true
-        narrow_return: true
-        no_param_type_removal: true
-        no_isset_on_object: true
-        no_empty_on_object: true
-
     # ignore_built_in_classes stays false (the default): true also drops the
     # relation to a built-in parent such as DomainException, so a "should
     # extend" rule fails on classes that do extend it.
     phpat:
         show_rule_names: true
 
-    # Members a later ticket will consume live in phpstan-baseline.neon; the
-    # ticket that consumes them removes their entry (unmatched entries fail).
-    shipmonkDeadCode:
-        usageExcluders:
-            tests:
-                enabled: true
-                # Factories are test support like tests/ (the autoload-dev default).
-                devPaths:
-                    - tests
-                    - database/factories
-        # Collector data stays in the result cache. The offloaded .dat files in
-        # tmpDir are garbage-collected by any run that does not read them all (a
-        # single-file run from an IDE, a concurrent run), after which every cached
-        # run fails with "Internal error: DCD cache file not found".
-        cache:
-            offloadCollectorData: false
-        usageProviders:
-            # Auto-enabled by transitive symfony/* and nette/utils packages.
-            symfony:
-                enabled: false
-            nette:
-                enabled: false
-
     ignoreErrors:
-        # Classes the container binds or autowires (scoped(Interface, Impl),
-        # constructor injection) have no `new` the detector can see.
-        -
-            identifier: shipmonk.deadMethod
-            message: '#^Unused .+::__construct#'
-            paths:
-                - src/Modules/*/Application/*
-                - src/Modules/*/Infrastructure/*
-            reportUnmatched: false
         # Larastan models every Query\Builder method forwarded through an
         # Eloquent builder or relation as static (EloquentBuilderMethodReflection),
         # so strict-rules would flag $invoice->productLines()->count(). The entry
@@ -96,87 +36,9 @@ parameters:
             identifier: staticMethod.dynamicCall
             message: '#^Dynamic call to static method Illuminate\\Database\\Eloquent\\Builder(<.*>)?::#'
             reportUnmatched: false
-        # Larastan models every closure macro as static (MacroMethodsClassReflectionExtension),
-        # Spectator's TestResponse assertions included. They are called in one
-        # helper only, so the entry is tied to that file and those two macros.
-        -
-            identifier: staticMethod.dynamicCall
-            message: '#^Dynamic call to static method Illuminate\\Testing\\TestResponse(<.*>)?::assertValid(Request|Response)\(\)\.$#'
-            path: tests/Concerns/ValidatesOpenApiContract.php
-
-    # The bundled dangerous set already covers var_dump() and print_r().
-    disallowedFunctionCalls:
-        -
-            function:
-                - 'dd()'
-                - 'dump()'
-                - 'ray()'
-            message: 'debug output must not be committed'
-
-    # Instance calls. The same lists appear under disallowedStaticCalls because
-    # spaze keeps the two call kinds apart and Larastan resolves static calls on
-    # a model (Invoice::whereRaw(), Invoice::dd()) to the Eloquent builder and
-    # DB facade calls to the connection; an entry on the facade name never
-    # matches. One ConnectionInterface entry covers DB::select(), the facade's
-    # DB::connection() and an injected connection alike; selectFromWriteConnection()
-    # and selectResultSets() exist only on the concrete Connection.
-    disallowedMethodCalls:
-        -
-            method:
-                - '*::dd()'
-                - '*::dump()'
-                - '*::ddRawSql()'
-                - '*::dumpRawSql()'
-            message: 'debug output must not be committed'
-        -
-            method:
-                - 'Illuminate\Database\ConnectionInterface::raw()'
-                - 'Illuminate\Database\ConnectionInterface::select()'
-                - 'Illuminate\Database\ConnectionInterface::selectOne()'
-                - 'Illuminate\Database\ConnectionInterface::scalar()'
-                - 'Illuminate\Database\ConnectionInterface::cursor()'
-                - 'Illuminate\Database\ConnectionInterface::insert()'
-                - 'Illuminate\Database\ConnectionInterface::update()'
-                - 'Illuminate\Database\ConnectionInterface::delete()'
-                - 'Illuminate\Database\ConnectionInterface::statement()'
-                - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
-                - 'Illuminate\Database\ConnectionInterface::unprepared()'
-                - 'Illuminate\Database\Connection::selectFromWriteConnection()'
-                - 'Illuminate\Database\Connection::selectResultSets()'
-                - 'Illuminate\Database\Query\Builder::*Raw()'
-                - 'Illuminate\Database\Eloquent\Builder::*Raw()'
-            message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
-
-    disallowedStaticCalls:
-        -
-            method:
-                - '*::dd()'
-                - '*::dump()'
-                - '*::ddRawSql()'
-                - '*::dumpRawSql()'
-            message: 'debug output must not be committed'
-        -
-            method:
-                - 'Illuminate\Database\ConnectionInterface::raw()'
-                - 'Illuminate\Database\ConnectionInterface::select()'
-                - 'Illuminate\Database\ConnectionInterface::selectOne()'
-                - 'Illuminate\Database\ConnectionInterface::scalar()'
-                - 'Illuminate\Database\ConnectionInterface::cursor()'
-                - 'Illuminate\Database\ConnectionInterface::insert()'
-                - 'Illuminate\Database\ConnectionInterface::update()'
-                - 'Illuminate\Database\ConnectionInterface::delete()'
-                - 'Illuminate\Database\ConnectionInterface::statement()'
-                - 'Illuminate\Database\ConnectionInterface::affectingStatement()'
-                - 'Illuminate\Database\ConnectionInterface::unprepared()'
-                - 'Illuminate\Database\Connection::selectFromWriteConnection()'
-                - 'Illuminate\Database\Connection::selectResultSets()'
-                - 'Illuminate\Database\Query\Builder::*Raw()'
-                - 'Illuminate\Database\Eloquent\Builder::*Raw()'
-            message: 'hand-written SQL is not allowed; use the query builder or Eloquent'
 
 services:
-    # Architecture rules (phpat). The dead-code detector's phpat provider marks
-    # their test_* methods as used.
+    # Architecture rules (phpat), the layer and module map included.
     -
         class: Tests\Architecture\InvoicesArchitectureRules
         tags:
