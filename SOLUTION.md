@@ -17,11 +17,12 @@ src/Modules/Invoices/
 ├── Domain/          models that own every rule and both status transitions;
 │                    StatusEnum; exceptions that know nothing about HTTP
 ├── Application/     one service per use case (create, find, send, mark
-│                    delivered), each with a single handle(); readonly DTOs
+│                    delivered), each with a single handle(); readonly DTOs;
+│                    NotificationFailed and SendNotRecorded
 ├── Infrastructure/  service provider, the webhook listener, the exception
 │                    to HTTP status map
-└── Presentation/    controller (one service call per action), form request,
-                     JSON resources, routes
+└── Presentation/    controller (one service call per action), form request
+                     and its length rule, JSON resources, routes
 ```
 
 Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guards (strict Eloquent outside production, no destructive database commands in production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
@@ -44,14 +45,14 @@ flowchart TD;
 ## Decisions
 
 1. **Eloquent models are the domain.** `Invoice` and `InvoiceProductLine` carry the rules; the services use them directly. Why: for one aggregate on a fixed schema, a repository would only forward to Eloquent. Instead of: repository interfaces with Eloquent implementations. ([#2])
-2. **Every rule and both transitions live on the models.** A new invoice is always `draft` (a `creating` listener), lines are checked on create and update, a direct write to `status` is rejected, and `markAsSending()` runs the send rule itself. Why: no caller can skip a rule or put an invoice in a state the README forbids. Instead of: rules in the form request or the services. ([#2], [#9])
+2. **Every rule and both transitions live on the models.** A new invoice is always `draft` (the default; a `creating` listener rejects any other status), lines are checked on create and update, a direct write to `status` is rejected, and `markAsSending()` runs the send rule itself. Why: no caller can skip a rule or put an invoice in a state the README forbids. Instead of: rules in the form request or the services. ([#2], [#9])
 3. **Transitions are atomic conditional updates.** `UPDATE … SET status = 'sending' WHERE id = ? AND status = 'draft'`: zero affected rows means another request won, so 409 and no email. `sending → sent-to-client` works the same way. Why: SQLite compiles `lockForUpdate()` to nothing, so a row lock would silently not exist. Instead of: `lockForUpdate()`. ([#9])
 4. **Strict services, tolerant listener.** The services throw. Only `WebhookDeliveredListener` catches "unknown invoice" and "not in `sending`", logs a warning with the id and the reason, and returns. Why: the webhook belongs to the provider and must not fail because of the invoice's state, while the services stay reusable. Instead of: services that swallow errors, or a webhook that answers 4xx. ([#14])
 5. **Notify inside the transaction, then commit.** Claim `draft → sending`, call `NotificationFacadeInterface::notify()`, commit. A throwing notification rolls the claim back. Why: a committed `sending` then means the notification went out, which is the README's "change the status after sending". Instead of: committing the claim first and compensating with `sending → draft`, or an outbox (queued notifications are out of scope). ([#12])
 6. **A failed notification answers 503.** `NotificationFailed` wraps any throwable from the facade, `\Error` included. The body says the invoice remains in draft and the send can be retried; the driver's own message never reaches the client. Why: 503 tells the client to retry. Instead of: Laravel's 500. ([#12], [#16])
 7. **Transactions begin `IMMEDIATE` with a 5 s busy timeout.** The write lock is taken at `BEGIN`, so a concurrent send waits, then reads `sending` and gets a clean 409. `SQLiteConnection` rolls back a transaction whose `COMMIT` failed (SQLite keeps it open), which releases the lock. Why: under SQLite's default `DEFERRED` mode, a transaction that read before it wrote failed at once with "database is locked", because SQLite does not wait to upgrade a read lock. Instead of: `DEFERRED` transactions. ([#13])
 8. **A failure after the notification is its own 500.** Once `notify()` has returned, only the commit is left. If the commit fails, `SendNotRecorded` answers a reported 500 that says the customer was notified, the invoice remains in draft and sending it again notifies them again. Why: the retryable 503 must only ever mean that nothing happened. Instead of: a warning in the documentation next to a 503. ([#16])
-9. **A database lock answers 503 on every `/api` route.** `DatabaseLockedRenderer` recognises SQLite's result codes 5 and 6 (busy, locked), never the message, because a query error's message contains the client's own input. Why: a request that waits past the timeout fails at `BEGIN`, before it writes anything, and responses are rendered from data already loaded, so nothing is read after a commit and the 503 is safe to retry. Instead of: a reported 500, or a 503 on send only. ([#16])
+9. **A database lock answers 503 on every `/api` route.** `DatabaseLockedRenderer` recognises SQLite's result codes 5 and 6 (busy, locked), never the message, because a query error's message contains the client's own input. Why: a request that waits past the timeout fails at `BEGIN`, before it writes anything; a commit that fails on the lock is rolled back (decision 7; for a send, decision 8 applies); and responses are rendered from data already loaded, so nothing is read after a commit. The 503 is therefore safe to retry. Instead of: a reported 500, or a 503 on send only. ([#16])
 10. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15])
 
 ## Testing strategy
@@ -73,7 +74,8 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
 | **Create** `POST /api/invoices` | | | |
-| A field missing or invalid; a quantity or unit price below 1 or not a JSON integer; `product_lines` not a list | 422 | nothing stored | [`CreateInvoiceTest`] |
+| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price below 1 or not a JSON integer; `product_lines` not a list | 422 | nothing stored | [`CreateInvoiceTest`] |
+| No `product_lines`, or `[]` (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
 | A form body, a body not marked as JSON, malformed JSON | 422 | nothing stored | [`CreateInvoiceTest`] |
 | More than 1000 lines | 422, one error, lines not validated | nothing stored | [`CreateInvoiceTest`] |
 | Lines whose total overflows PHP's int | 422 on `product_lines` | nothing stored | [`CreateInvoiceTest`] |
@@ -95,7 +97,7 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
-| The database stays locked past the 5 s busy timeout | 503, nothing written, retryable | unchanged | [`DatabaseLockedTest`], [`DatabaseLockedRendererTest`] |
+| The database stays locked past the 5 s busy timeout | 503, nothing written, retryable | unchanged | [`DatabaseLockedTest`] (create, send), [`DatabaseLockedRendererTest`] (any `/api` path) |
 
 Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the `Accept` header.
 
@@ -119,7 +121,7 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec app php artisan test` and `docker compose exec app composer phpstan` do the same. oasdiff and Schemathesis run on the host, because they need Docker.
+Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root). oasdiff and Schemathesis run on the host, because they need Docker.
 
 | Command | What it checks | Note |
 |---|---|---|
@@ -141,7 +143,7 @@ Set up with `./start.sh` as the README says. The commands run through Laravel Sa
 
 The document describes production. `phpunit.xml` pins `APP_DEBUG=false`; with the development `.env`'s `APP_DEBUG=true`, error bodies also carry `exception`, `file`, `line` and `trace`, which the closed document does not allow. Because responses are closed, a new response field needs a regenerated document, and a client that validates strictly against the old one would reject it. oasdiff reports such a field as information, not as a breaking change.
 
-**Fuzzing.** Run [Schemathesis](https://schemathesis.readthedocs.io) by hand, with Sail up, in two terminals. First, a second server with debug off on a throwaway SQLite file (stop it with Ctrl+C):
+**Fuzzing.** Run [Schemathesis](https://schemathesis.readthedocs.io) by hand, with Sail up, in two terminals. First, a second server with debug off on a throwaway SQLite file (stop it with Ctrl+C). A cached config (`bootstrap/cache/config.php`) would make it ignore these variables, so run `vendor/bin/sail artisan config:clear` first if you ever cached it:
 
 ```bash
 vendor/bin/sail bash -c 'export DB_DATABASE=/tmp/fuzz-api.sqlite && rm -f "$DB_DATABASE"* && touch "$DB_DATABASE" && php artisan migrate --force && APP_DEBUG=false LOG_CHANNEL=stderr exec php artisan serve --host=127.0.0.1 --port=8001 --no-reload'
@@ -164,14 +166,15 @@ The runs that closed the fuzzing work found no server error and no response outs
 The API takes JSON only. Send the create body with `Content-Type: application/json`; a form-encoded request answers 422.
 
 ```bash
-curl -s http://localhost/api/invoices \
+RESPONSE=$(curl -s http://localhost/api/invoices \
   -H 'Content-Type: application/json' \
   -d '{"customer_name": "Jane Doe", "customer_email": "jane@example.com",
        "product_lines": [{"name": "Consulting", "quantity": 2, "unit_price": 15000},
-                         {"name": "Hosting", "quantity": 3, "unit_price": 100}]}'
+                         {"name": "Hosting", "quantity": 3, "unit_price": 100}]}')
+echo "$RESPONSE"
 # 201, status "draft"
 
-INVOICE=<data.id from the response>
+INVOICE=$(echo "$RESPONSE" | sed -E 's/.*"data":[{]"id":"([^"]*)".*/\1/')
 
 curl -s -X POST http://localhost/api/invoices/$INVOICE/send
 # 200, status "sending"; sending again answers 409
