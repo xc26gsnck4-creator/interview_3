@@ -44,6 +44,20 @@
                                     "additionalProperties": false
                                 }
                             }
+                        },
+                        "links": {
+                            "ShowInvoice": {
+                                "operationId": "invoices.show",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            },
+                            "SendInvoice": {
+                                "operationId": "invoices.send",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            }
                         }
                     },
                     "422": {
@@ -185,6 +199,21 @@
                                         "data"
                                     ],
                                     "additionalProperties": false
+                                }
+                            }
+                        },
+                        "links": {
+                            "ShowInvoice": {
+                                "operationId": "invoices.show",
+                                "parameters": {
+                                    "invoice": "$response.body#/data/id"
+                                }
+                            },
+                            "ReportDelivery": {
+                                "operationId": "notification.hook",
+                                "parameters": {
+                                    "action": "delivered",
+                                    "reference": "$response.body#/data/id"
                                 }
                             }
                         }
