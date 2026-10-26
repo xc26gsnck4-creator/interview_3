@@ -125,7 +125,7 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root). oasdiff and Schemathesis run on the host, because they need Docker.
+Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root). oasdiff and Schemathesis are launched from the host and run in their own containers (`docker run`), because the Sail container has no Docker.
 
 | Command | What it checks | Note |
 |---|---|---|
@@ -180,8 +180,11 @@ echo "$RESPONSE"
 
 INVOICE=$(echo "$RESPONSE" | sed -E 's/.*"data":[{]"id":"([^"]*)".*/\1/')
 
-curl -s -X POST http://localhost/api/invoices/$INVOICE/send
-# 200, status "sending"; sending again answers 409
+curl -s -w '\n%{http_code}\n' -X POST http://localhost/api/invoices/$INVOICE/send
+# 200, status "sending"
+
+curl -s -w '\n%{http_code}\n' -X POST http://localhost/api/invoices/$INVOICE/send
+# 409: the invoice is already sending
 
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/notification/hook/delivered/$INVOICE
 # 204: the DummyDriver calls nothing, so this stands in for the provider's delivery report
