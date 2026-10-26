@@ -128,7 +128,7 @@ Set up with `./start.sh` as the README says. The commands run through Laravel Sa
 | Command | What it checks | Note |
 |---|---|---|
 | `vendor/bin/sail artisan test` | the test suite | in-memory SQLite; never touches `database/database.sqlite` |
-| `vendor/bin/sail bin pint --test` | code style: the Laravel preset plus `declare(strict_types=1)` in every file (`pint.json`) | |
+| `vendor/bin/sail bin pint --test` | code style: the Laravel preset plus `declare(strict_types=1)` in every `.php` file (`pint.json`) | |
 | `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. There is no baseline; the one ignore in `phpstan.neon` is structural and commented |
 | `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
 
