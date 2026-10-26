@@ -167,6 +167,136 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 201);
     }
 
+    /**
+     * @return Iterator<string, array{string}>
+     */
+    public static function textCharacters(): Iterator
+    {
+        yield 'ascii' => ['n'];
+        yield 'multibyte' => ['ń'];
+    }
+
+    /**
+     * The limit counts characters, as the document's `maxLength` does, not bytes.
+     */
+    #[DataProvider('textCharacters')]
+    public function test_accepts_text_of_exactly_255_characters(string $character): void
+    {
+        $name = str_repeat($character, 255);
+
+        $response = $this->postJson(route('invoices.store'), [
+            ...self::withLine([...self::LINE, 'name' => $name]),
+            'customer_name' => $name,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.customer_name', $name)
+            ->assertJsonPath('data.product_lines.0.name', $name);
+        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_name' => $name]);
+        $this->assertMatchesContract($response, 201);
+    }
+
+    /**
+     * The document's `email` format caps an address at 254 characters (RFC 5321)
+     * while the rule accepts 255, so the request leaves the document's format
+     * (not its `maxLength`) and the contract check skips it.
+     */
+    public function test_accepts_an_email_of_exactly_255_characters(): void
+    {
+        $email = self::validEmailOfLength(255);
+
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'customer_email' => $email]);
+
+        $response->assertCreated()->assertJsonPath('data.customer_email', $email);
+        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_email' => $email]);
+        $this->assertMatchesContract($response, 201, validRequest: false);
+    }
+
+    /**
+     * Only what is left after trimming is stored and answered.
+     */
+    public function test_stores_and_answers_a_padded_name_trimmed(): void
+    {
+        $response = $this->postJson(route('invoices.store'), [
+            ...self::withLine([...self::LINE, 'name' => '  Consulting  ']),
+            'customer_name' => "\t Jane Doe \t",
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.customer_name', 'Jane Doe')
+            ->assertJsonPath('data.product_lines.0.name', 'Consulting');
+        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'customer_name' => 'Jane Doe']);
+        $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Consulting']);
+        $this->assertMatchesContract($response, 201);
+    }
+
+    /**
+     * A value over the limit after trimming already fails the rule; the check of
+     * the input as sent adds no second message.
+     */
+    public function test_reports_a_name_over_the_limit_after_trimming_once(): void
+    {
+        $name = str_repeat('n', 256);
+
+        $response = $this->postJson(route('invoices.store'), [
+            ...self::withLine([...self::LINE, 'name' => $name]),
+            'customer_name' => $name,
+            'customer_email' => self::validEmailOfLength(256),
+        ]);
+
+        $response->assertUnprocessable();
+        self::assertSame([
+            'customer_name' => ['The customer name field must not be greater than 255 characters.'],
+            'customer_email' => ['The customer email field must not be greater than 255 characters.'],
+            'product_lines.0.name' => ['The product_lines.0.name field must not be greater than 255 characters.'],
+        ], $response->json('errors'));
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    /**
+     * A name that fits once trimmed fails only the check of the input as sent,
+     * which reports Laravel's own `max` message for a string.
+     */
+    public function test_reports_the_max_message_for_a_name_over_the_limit_as_sent(): void
+    {
+        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'customer_name' => "\t".str_repeat('n', 255)]);
+
+        $response->assertUnprocessable();
+        self::assertSame([
+            'customer_name' => ['The customer name field must not be greater than 255 characters.'],
+        ], $response->json('errors'));
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
+    /**
+     * Each value fails a rule and also breaks a later one: 256 items for `max`,
+     * or 256 characters as sent.
+     *
+     * @return Iterator<string, array{array<mixed>, string, string}>
+     */
+    public static function textValuesFailingTwoRules(): Iterator
+    {
+        yield 'customer name as 256 strings' => [[...self::PAYLOAD, 'customer_name' => array_fill(0, 256, 'n')], 'customer_name', 'The customer name field must be a string.'];
+        yield 'customer email of 255 characters without an @ after a tab' => [[...self::PAYLOAD, 'customer_email' => "\t".str_repeat('n', 255)], 'customer_email', 'The customer email field must be a valid email address.'];
+        yield 'line name as 256 strings' => [self::withLine([...self::LINE, 'name' => array_fill(0, 256, 'n')]), 'product_lines.0.name', 'The product_lines.0.name field must be a string.'];
+    }
+
+    /**
+     * `bail` stops a text field at its first failure, so the later rule adds
+     * no second message.
+     *
+     * @param  array<mixed>  $payload
+     */
+    #[DataProvider('textValuesFailingTwoRules')]
+    public function test_reports_only_the_first_failure_of_a_text_field(array $payload, string $errorKey, string $message): void
+    {
+        $response = $this->postJson(route('invoices.store'), $payload);
+
+        $response->assertUnprocessable();
+        self::assertSame([$errorKey => [$message]], $response->json('errors'));
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_ignores_status_in_payload(): void
     {
         $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'status' => 'sent-to-client']);
@@ -185,7 +315,9 @@ final class CreateInvoiceTest extends TestCase
         yield 'missing customer email' => [Arr::except(self::PAYLOAD, ['customer_email']), 'customer_email'];
         yield 'malformed customer email' => [[...self::PAYLOAD, 'customer_email' => 'nope'], 'customer_email'];
         yield 'customer name of 256 characters' => [[...self::PAYLOAD, 'customer_name' => str_repeat('n', 256)], 'customer_name'];
-        yield 'customer email of 256 characters' => [[...self::PAYLOAD, 'customer_email' => self::validEmailOf256Characters()], 'customer_email'];
+        yield 'customer email of 256 characters' => [[...self::PAYLOAD, 'customer_email' => self::validEmailOfLength(256)], 'customer_email'];
+        yield 'customer name of 255 characters after a tab' => [[...self::PAYLOAD, 'customer_name' => "\t".str_repeat('n', 255)], 'customer_name'];
+        yield 'customer email of 255 characters after a tab' => [[...self::PAYLOAD, 'customer_email' => "\t".self::validEmailOfLength(255)], 'customer_email'];
         yield 'product lines as a string' => [[...self::PAYLOAD, 'product_lines' => 'x'], 'product_lines'];
         yield 'product lines as an object' => [[...self::PAYLOAD, 'product_lines' => ['first' => self::LINE]], 'product_lines'];
         yield 'product lines as an empty object' => [[...self::PAYLOAD, 'product_lines' => (object) []], 'product_lines'];
@@ -195,6 +327,8 @@ final class CreateInvoiceTest extends TestCase
         yield 'empty line name' => [self::withLine([...self::LINE, 'name' => '']), 'product_lines.0.name'];
         yield 'blank line name' => [self::withLine([...self::LINE, 'name' => '   ']), 'product_lines.0.name'];
         yield 'line name of 256 characters' => [self::withLine([...self::LINE, 'name' => str_repeat('n', 256)]), 'product_lines.0.name'];
+        yield 'line name of 255 characters after a tab' => [self::withLine([...self::LINE, 'name' => "\t".str_repeat('n', 255)]), 'product_lines.0.name'];
+        yield 'second line name of 255 characters after a soft hyphen' => [[...self::PAYLOAD, 'product_lines' => [self::LINE, [...self::LINE, 'name' => "\u{00AD}".str_repeat('n', 255)]]], 'product_lines.1.name'];
         yield 'line that is not an object' => [[...self::PAYLOAD, 'product_lines' => ['Consulting']], 'product_lines.0.name'];
         yield 'line without name' => [self::withLine(Arr::except(self::LINE, ['name'])), 'product_lines.0.name'];
         yield 'line without quantity' => [self::withLine(Arr::except(self::LINE, ['quantity'])), 'product_lines.0.quantity'];
@@ -299,6 +433,30 @@ final class CreateInvoiceTest extends TestCase
         $this->assertMatchesContract($response, 422, validRequest: false);
     }
 
+    /**
+     * @return Iterator<string, array{string}>
+     */
+    public static function jsonBodiesThatAreNotObjects(): Iterator
+    {
+        yield 'a string' => ['"Jane Doe"'];
+        yield 'a number' => ['5'];
+        yield 'null' => ['null'];
+    }
+
+    #[DataProvider('jsonBodiesThatAreNotObjects')]
+    public function test_answers_422_to_a_json_body_that_is_not_an_object(string $body): void
+    {
+        $response = $this->call(
+            'POST',
+            route('invoices.store'),
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: $body,
+        );
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
+        $this->assertMatchesContract($response, 422, validRequest: false);
+    }
+
     public function test_ignores_fields_in_the_query_string(): void
     {
         $response = $this->postJson(
@@ -339,11 +497,12 @@ final class CreateInvoiceTest extends TestCase
 
     /**
      * A well-formed address the `email` rule accepts on its own, so only the
-     * length limit rejects it.
+     * length limit decides. Needs a length of at least 249: the local part is
+     * `$length - 248` characters.
      */
-    private static function validEmailOf256Characters(): string
+    private static function validEmailOfLength(int $length): string
     {
-        return str_repeat('a', 8).'@'.implode('.', array_fill(0, 4, str_repeat('b', 60))).'.com';
+        return str_repeat('a', $length - 248).'@'.implode('.', array_fill(0, 4, str_repeat('b', 60))).'.com';
     }
 
     /**

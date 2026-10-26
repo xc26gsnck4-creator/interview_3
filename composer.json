@@ -7,6 +7,7 @@
     "require": {
         "php": "^8.5",
         "ext-filter": "*",
+        "ext-mbstring": "*",
         "ext-pdo": "*",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
