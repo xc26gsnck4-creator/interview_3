@@ -64,3 +64,7 @@ The Notification module included in this repository is a minimal, mock integrati
 
 * Start the project by running `./start.sh`.
 * To access the container environment, use: `docker compose exec app bash`.
+
+## Solution
+
+The solution, its decisions, its tests and its failure behaviour are described in [SOLUTION.md](SOLUTION.md).
