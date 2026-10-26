@@ -63,15 +63,17 @@ final class CreateInvoiceRequest extends FormRequest
      * line). A text field checks its length as sent (MaxLengthAsSent) last, and
      * `bail` stops the field at its first failure, so that check runs only on a
      * value the other rules accepted after trimming and a field reports one
-     * message.
+     * message. `max:` is there for the API document (Scramble's `maxLength`):
+     * at runtime, for a JSON body, the check of the length as sent already
+     * rejects everything `max:` would, because trimming only shortens a value;
+     * `max:` reports first when the trimmed value is already too long.
      *
      * @return array<string, list<string|MaxLengthAsSent>>
      */
     public function rules(): array
     {
         $amount = ['required', 'integer:strict', 'min:1', 'max:'.InvoiceProductLine::MAX_VALUE];
-        $sentBody = $this->isJson() ? json_decode($this->getContent(), true) : null;
-        $lengthAsSent = new MaxLengthAsSent(self::MAX_TEXT_LENGTH, is_array($sentBody) ? $sentBody : []);
+        $lengthAsSent = new MaxLengthAsSent(self::MAX_TEXT_LENGTH, $this->sentBody());
 
         return [
             'customer_name' => ['bail', 'required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH, $lengthAsSent],
@@ -87,12 +89,12 @@ final class CreateInvoiceRequest extends FormRequest
      * The shape of product_lines is checked first, on its own. Laravel expands
      * the per-line rules over every submitted line before any rule runs, so
      * its own rules (a list of at most MAX_PRODUCT_LINES) run before the lines
-     * are validated. JSON is decoded into PHP arrays, where `{}` and
+     * are validated. Laravel decodes JSON into PHP arrays, where `{}` and
      * `{"0": ...}` pass as lists, so when the array rules accepted
-     * product_lines the raw body is decoded once more, keeping objects, and
-     * must show a JSON array there. The check fails closed: a body that
-     * decodes only into arrays (a key starting with NUL is no valid property
-     * name) reports the `list` error too.
+     * product_lines the body as sent (sentBody(), objects kept) must show a
+     * JSON array there. The check fails closed: a body that decodes only into
+     * arrays (a key starting with NUL is no valid property name) reports the
+     * `list` error too.
      */
     #[Override]
     protected function prepareForValidation(): void
@@ -103,7 +105,7 @@ final class CreateInvoiceRequest extends FormRequest
                 return;
             }
 
-            $body = json_decode($this->getContent());
+            $body = $this->sentBody();
 
             if (! is_object($body) || ! is_array(get_object_vars($body)['product_lines'])) {
                 $validator->addFailure('product_lines', 'list');
@@ -132,5 +134,18 @@ final class CreateInvoiceRequest extends FormRequest
                 array_keys($validated->array('product_lines')),
             ),
         );
+    }
+
+    /**
+     * The raw body decoded once per request (`once()`), keeping JSON objects as
+     * objects so that `{}` and `[]` stay apart; null when the request is not
+     * marked as JSON or the body does not decode. The check of product_lines'
+     * shape and the check of the length as sent both read it. A body the
+     * object decode rejects (e.g. a key starting with NUL) leaves the as-sent
+     * check nothing to read, so only the trimmed value is checked.
+     */
+    private function sentBody(): mixed
+    {
+        return once(fn (): mixed => $this->isJson() ? json_decode($this->getContent()) : null);
     }
 }

@@ -14,18 +14,16 @@
 # 2. The fuzzer, in the app container's network, so port 8001 is never
 #    published. It runs in the image's working directory, /app, which is
 #    writable: .hypothesis/ and the coverage report go there and are removed with
-#    the container. To replay a failure, append --seed <seed> (Schemathesis
-#    prints the seed), after restarting the server for a fresh database.
+#    the container. No seed is pinned, so each run explores new data.
+#    Schemathesis prints the seed it used; appending --seed <seed> to this
+#    command replays it (restart the server first for a fresh database). Seed 1
+#    reached send (200) and the delivery webhook (204) in INV-9b.
 #
 #    docker run --rm --network "container:$(docker compose ps -q app)" -v "$PWD/api.json:/app/api.json:ro" -v "$PWD/schemathesis.toml:/app/schemathesis.toml:ro" schemathesis/schemathesis:4.32.5 --config-file schemathesis.toml run api.json
 
 # The server of command 1. The app Sail serves on port 80 (debug on,
 # database/database.sqlite) is never fuzzed.
 base-url = "http://127.0.0.1:8001/api"
-
-# Fixed, so a run repeats; seed 1 was picked because its run is clean and
-# reaches a send 200 and a webhook 204.
-seed = 1
 
 [generation]
 # 500 examples per operation: with the default 100 the linked scenarios
