@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Presentation\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
@@ -20,6 +21,12 @@ final class CreateInvoiceRequest extends FormRequest
      * besides its fields is flattened too), as JSON decoding does.
      */
     private const int MAX_PRODUCT_LINES = 1000;
+
+    /**
+     * The length the API document states (`maxLength`) for the customer's name
+     * and email and for a line's name.
+     */
+    private const int MAX_TEXT_LENGTH = 255;
 
     public function authorize(): bool
     {
@@ -60,10 +67,10 @@ final class CreateInvoiceRequest extends FormRequest
         $amount = ['required', 'integer:strict', 'min:1', 'max:'.InvoiceProductLine::MAX_VALUE];
 
         return [
-            'customer_name' => ['required', 'string', 'max:255'],
-            'customer_email' => ['required', 'email', 'max:255'],
+            'customer_name' => ['required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH],
+            'customer_email' => ['required', 'email', 'max:'.self::MAX_TEXT_LENGTH],
             'product_lines' => ['array', 'list', 'max:'.self::MAX_PRODUCT_LINES],
-            'product_lines.*.name' => ['required', 'string', 'max:255'],
+            'product_lines.*.name' => ['required', 'string', 'min:1', 'max:'.self::MAX_TEXT_LENGTH],
             'product_lines.*.quantity' => $amount,
             'product_lines.*.unit_price' => $amount,
         ];
@@ -96,6 +103,48 @@ final class CreateInvoiceRequest extends FormRequest
             }
         });
         $validator->validate();
+    }
+
+    /**
+     * Laravel trims a string (whitespace, control and invisible characters such
+     * as a tab or U+00AD, see `Str::trim`) before the rules run, so `max` sees
+     * the trimmed value while the API document's `maxLength` applies to the
+     * input as sent. The raw body is therefore measured too, in characters
+     * (`mb_strlen`, like JSON Schema) and only for a field with no error yet,
+     * so a value over the limit after trimming reports one message. The failure
+     * is the rule's own: the studly name 'Max' is what makes Laravel pick the
+     * string variant of the message. It is added here, on the validator Laravel
+     * builds, rather than in an `after()` method, which the final class would
+     * have to keep protected for the framework to call it.
+     */
+    #[Override]
+    protected function getValidatorInstance(): ValidatorContract
+    {
+        $validator = parent::getValidatorInstance();
+        $validator->after(function (Validator $validator): void {
+            if (! $this->isJson()) {
+                return;
+            }
+
+            $body = json_decode($this->getContent(), true);
+            $values = [
+                'customer_name' => data_get($body, 'customer_name'),
+                'customer_email' => data_get($body, 'customer_email'),
+            ];
+            $lines = data_get($body, 'product_lines');
+
+            foreach (is_array($lines) ? $lines : [] as $index => $line) {
+                $values["product_lines.{$index}.name"] = data_get($line, 'name');
+            }
+
+            foreach ($values as $key => $value) {
+                if (is_string($value) && mb_strlen($value) > self::MAX_TEXT_LENGTH && ! $validator->errors()->has($key)) {
+                    $validator->addFailure($key, 'Max', [self::MAX_TEXT_LENGTH]);
+                }
+            }
+        });
+
+        return $validator;
     }
 
     /**
