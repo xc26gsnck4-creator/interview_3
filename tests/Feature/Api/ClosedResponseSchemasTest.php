@@ -6,9 +6,9 @@ namespace Tests\Feature\Api;
 
 use Closure;
 use ErrorException;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Router;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Modules\Invoices\Domain\Models\Invoice;
@@ -27,6 +27,21 @@ final class ClosedResponseSchemasTest extends TestCase
 {
     use ValidatesOpenApiContract;
 
+    /** @var array<array-key, mixed> */
+    private array $document = [];
+
+    /** @var list<string> */
+    private array $openObjects = [];
+
+    /** @var list<string> */
+    private array $unresolved = [];
+
+    /** @var list<string> */
+    private array $allOfs = [];
+
+    /** @var array<string, true> */
+    private array $visited = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -35,7 +50,7 @@ final class ClosedResponseSchemasTest extends TestCase
     }
 
     /**
-     * The middleware is appended to the `api` group, so it runs inside
+     * The middleware is appended to the `api` group through the HTTP kernel, so it runs inside
      * Spectator's (prepended) and the contract check sees the extra key.
      */
     public function test_contract_check_rejects_an_undocumented_field_in_a_response(): void
@@ -54,7 +69,9 @@ final class ClosedResponseSchemasTest extends TestCase
                 return $response->setData($body);
             }
         });
-        $this->app->make(Router::class)->pushMiddlewareToGroup('api', 'add-extra-product-line-field');
+        $kernel = $this->app->make(Kernel::class);
+        $kernel->appendMiddlewareToGroup('api', 'add-extra-product-line-field');
+
         $invoice = Invoice::factory()->withLines()->create();
 
         $response = $this->getJson(route('invoices.show', $invoice->id));
@@ -69,31 +86,30 @@ final class ClosedResponseSchemasTest extends TestCase
 
     public function test_every_response_object_in_the_document_is_closed(): void
     {
-        $document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
-        $openObjects = [];
-        $unresolved = [];
-        $allOfs = [];
-        $visited = [];
+        $this->document = File::json(base_path('api.json'), JSON_THROW_ON_ERROR);
+        $this->openObjects = [];
+        $this->unresolved = [];
+        $this->allOfs = [];
+        $this->visited = [];
 
-        foreach ($this->responseRoots($document) as $path => $response) {
-            $this->walkSchema($document, $response, $path, $openObjects, $unresolved, $allOfs, $visited);
+        foreach ($this->responseRoots() as $path => $response) {
+            $this->walkSchema($response, $path);
         }
 
-        self::assertSame([], $unresolved, 'These $ref values do not resolve inside api.json.');
-        self::assertSame([], $allOfs, 'allOf in a response: do not close its branches one by one, close the parent with unevaluatedProperties: false.');
-        self::assertSame([], $openObjects, 'These response objects have properties but additionalProperties is not false.');
-        self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $visited);
+        self::assertSame([], $this->unresolved, 'These $ref values do not resolve inside api.json.');
+        self::assertSame([], $this->allOfs, 'allOf in a response: do not close its branches one by one, close the parent with unevaluatedProperties: false.');
+        self::assertSame([], $this->openObjects, 'These response objects have properties but additionalProperties is not false.');
+        self::assertArrayHasKey('#/components/schemas/InvoiceProductLineResource', $this->visited);
     }
 
     /**
-     * @param  array<array-key, mixed>  $document
      * @return array<string, mixed>
      */
-    private function responseRoots(array $document): array
+    private function responseRoots(): array
     {
         $roots = [];
 
-        foreach ($this->asArray(Arr::get($document, 'paths')) as $uri => $operations) {
+        foreach ($this->asArray(Arr::get($this->document, 'paths')) as $uri => $operations) {
             foreach ($this->asArray($operations) as $method => $operation) {
                 foreach ($this->asArray(Arr::get($this->asArray($operation), 'responses')) as $status => $response) {
                     $roots[sprintf('%s %s %s', $method, $uri, $status)] = $response;
@@ -101,7 +117,7 @@ final class ClosedResponseSchemasTest extends TestCase
             }
         }
 
-        foreach (array_keys($this->asArray(Arr::get($document, 'components.responses'))) as $name) {
+        foreach (array_keys($this->asArray(Arr::get($this->document, 'components.responses'))) as $name) {
             $roots['#/components/responses/'.$name] = ['$ref' => '#/components/responses/'.$name];
         }
 
@@ -114,27 +130,21 @@ final class ClosedResponseSchemasTest extends TestCase
      * with properties is open unless additionalProperties is false. An `allOf`
      * is only recorded: closing its branches one by one would make them reject
      * each other's properties.
-     *
-     * @param  array<array-key, mixed>  $document
-     * @param  list<string>  $openObjects
-     * @param  list<string>  $unresolved
-     * @param  list<string>  $allOfs
-     * @param  array<string, true>  $visited
      */
-    private function walkSchema(array $document, mixed $node, string $path, array &$openObjects, array &$unresolved, array &$allOfs, array &$visited): void
+    private function walkSchema(mixed $node, string $path): void
     {
         $node = $this->asArray($node);
         $reference = $node['$ref'] ?? null;
 
         if (is_string($reference)) {
-            if (! isset($visited[$reference])) {
-                $visited[$reference] = true;
-                $target = $this->resolvePointer($document, $reference);
+            if (! isset($this->visited[$reference])) {
+                $this->visited[$reference] = true;
+                $target = $this->resolvePointer($reference);
 
                 if ($target === null) {
-                    $unresolved[] = $path.' -> '.$reference;
+                    $this->unresolved[] = $path.' -> '.$reference;
                 } else {
-                    $this->walkSchema($document, $target, $reference, $openObjects, $unresolved, $allOfs, $visited);
+                    $this->walkSchema($target, $reference);
                 }
             }
 
@@ -142,30 +152,30 @@ final class ClosedResponseSchemasTest extends TestCase
         }
 
         if (isset($node['properties']) && ($node['additionalProperties'] ?? null) !== false) {
-            $openObjects[] = $path;
+            $this->openObjects[] = $path;
         }
 
         foreach ($this->asArray($node['content'] ?? null) as $mediaType => $media) {
-            $this->walkSchema($document, $this->asArray($media)['schema'] ?? null, $path.' '.$mediaType, $openObjects, $unresolved, $allOfs, $visited);
+            $this->walkSchema($this->asArray($media)['schema'] ?? null, $path.' '.$mediaType);
         }
 
         foreach ($this->asArray($node['properties'] ?? null) as $name => $property) {
-            $this->walkSchema($document, $property, $path.'.'.$name, $openObjects, $unresolved, $allOfs, $visited);
+            $this->walkSchema($property, $path.'.'.$name);
         }
 
         if (isset($node['allOf'])) {
-            $allOfs[] = $path;
+            $this->allOfs[] = $path;
         }
 
         foreach (['anyOf', 'oneOf'] as $keyword) {
             foreach ($this->asArray($node[$keyword] ?? null) as $index => $branch) {
-                $this->walkSchema($document, $branch, sprintf('%s.%s[%s]', $path, $keyword, $index), $openObjects, $unresolved, $allOfs, $visited);
+                $this->walkSchema($branch, sprintf('%s.%s[%s]', $path, $keyword, $index));
             }
         }
 
         foreach (['items' => '[]', 'additionalProperties' => '.*'] as $keyword => $suffix) {
             if (isset($node[$keyword])) {
-                $this->walkSchema($document, $node[$keyword], $path.$suffix, $openObjects, $unresolved, $allOfs, $visited);
+                $this->walkSchema($node[$keyword], $path.$suffix);
             }
         }
     }
@@ -174,16 +184,15 @@ final class ClosedResponseSchemasTest extends TestCase
      * Resolves a local `#/a/b` reference segment by segment (RFC 6901: `~1` is
      * `/`, `~0` is `~`), so a component name with dots resolves too.
      *
-     * @param  array<array-key, mixed>  $document
      * @return array<array-key, mixed>|null
      */
-    private function resolvePointer(array $document, string $reference): ?array
+    private function resolvePointer(string $reference): ?array
     {
         if (! str_starts_with($reference, '#/')) {
             return null;
         }
 
-        $target = $document;
+        $target = $this->document;
 
         foreach (explode('/', substr($reference, 2)) as $segment) {
             $segment = str_replace(['~1', '~0'], ['/', '~'], $segment);
