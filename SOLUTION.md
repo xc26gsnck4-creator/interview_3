@@ -27,11 +27,14 @@ src/Modules/Invoices/
 
 Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guards (strict Eloquent outside production, no destructive database commands in production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
 
-Allowed dependencies, enforced by Deptrac (from `deptrac analyse --formatter=mermaidjs`, without its use counts). Invoices reaches Notifications only through its `Api`:
+SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
+
+Allowed dependencies, enforced by Deptrac (from `deptrac analyse --formatter=mermaidjs`, without its use counts). Invoices reaches Notifications only through its `Api`. The dotted arrow is allowed too, but the models name their factories only in the `@use HasFactory<…>` PHPDoc, which Deptrac does not count:
 
 ```mermaid
 flowchart TD;
     Factories --> InvoicesDomain;
+    InvoicesDomain -.-> Factories;
     InvoicesApplication --> InvoicesDomain;
     InvoicesApplication --> NotificationsApi;
     InvoicesInfrastructure --> InvoicesDomain;
@@ -206,6 +209,7 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 
 [#2]: https://github.com/xc26gsnck4-creator/interview_3/pull/2
 [#9]: https://github.com/xc26gsnck4-creator/interview_3/pull/9
+[#11]: https://github.com/xc26gsnck4-creator/interview_3/pull/11
 [#12]: https://github.com/xc26gsnck4-creator/interview_3/pull/12
 [#13]: https://github.com/xc26gsnck4-creator/interview_3/pull/13
 [#14]: https://github.com/xc26gsnck4-creator/interview_3/pull/14
