@@ -15,7 +15,7 @@ Each decision links the pull request where it was made and reviewed.
 ```
 src/Modules/Invoices/
 ├── Domain/          models that own every rule and both status transitions;
-│                    StatusEnum; exceptions that know nothing about HTTP
+│                    InvoiceStatus; exceptions that know nothing about HTTP
 ├── Application/     one service per use case (create, find, send, mark
 │                    delivered), each with a single handle(); readonly DTOs;
 │                    NotificationFailed

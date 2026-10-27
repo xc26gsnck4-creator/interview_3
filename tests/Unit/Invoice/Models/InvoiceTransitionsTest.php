@@ -6,7 +6,7 @@ namespace Tests\Unit\Invoice\Models;
 
 use Illuminate\Support\Facades\DB;
 use Iterator;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Models\Invoice;
@@ -28,7 +28,7 @@ final class InvoiceTransitionsTest extends TestCase
 
         $invoice->ensureCanBeSent();
 
-        self::assertSame(StatusEnum::Draft, $invoice->status);
+        self::assertSame(InvoiceStatus::Draft, $invoice->status);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
@@ -74,19 +74,19 @@ final class InvoiceTransitionsTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{StatusEnum}>
+     * @return Iterator<string, array{InvoiceStatus}>
      */
     public static function statusesOtherThanDraft(): Iterator
     {
-        yield 'sending' => [StatusEnum::Sending];
-        yield 'sent to client' => [StatusEnum::SentToClient];
+        yield 'sending' => [InvoiceStatus::Sending];
+        yield 'sent to client' => [InvoiceStatus::SentToClient];
     }
 
     /**
      * The invoice has no lines, so the status check is proven to run first.
      */
     #[DataProvider('statusesOtherThanDraft')]
-    public function test_ensure_can_be_sent_throws_transition_when_not_draft(StatusEnum $status): void
+    public function test_ensure_can_be_sent_throws_transition_when_not_draft(InvoiceStatus $status): void
     {
         $invoice = Invoice::factory()->inStatus($status)->create();
 
@@ -105,15 +105,15 @@ final class InvoiceTransitionsTest extends TestCase
         $invoice->markAsSending();
 
         $stored = Invoice::query()->findOrFail($invoice->id);
-        self::assertSame(StatusEnum::Sending, $invoice->status);
-        self::assertSame(StatusEnum::Sending, $stored->status);
+        self::assertSame(InvoiceStatus::Sending, $invoice->status);
+        self::assertSame(InvoiceStatus::Sending, $stored->status);
         self::assertSame(now()->toDateTimeString(), $stored->updated_at?->toDateTimeString());
         self::assertSame(now()->toDateTimeString(), $invoice->updated_at?->toDateTimeString());
         self::assertFalse($invoice->isDirty());
     }
 
     #[DataProvider('statusesOtherThanDraft')]
-    public function test_mark_as_sending_throws_when_not_draft(StatusEnum $status): void
+    public function test_mark_as_sending_throws_when_not_draft(InvoiceStatus $status): void
     {
         $invoice = Invoice::factory()->inStatus($status)->create();
 
@@ -149,24 +149,24 @@ final class InvoiceTransitionsTest extends TestCase
         $invoice->markAsSentToClient();
 
         $stored = Invoice::query()->findOrFail($invoice->id);
-        self::assertSame(StatusEnum::SentToClient, $invoice->status);
-        self::assertSame(StatusEnum::SentToClient, $stored->status);
+        self::assertSame(InvoiceStatus::SentToClient, $invoice->status);
+        self::assertSame(InvoiceStatus::SentToClient, $stored->status);
         self::assertSame(now()->toDateTimeString(), $stored->updated_at?->toDateTimeString());
         self::assertSame(now()->toDateTimeString(), $invoice->updated_at?->toDateTimeString());
         self::assertFalse($invoice->isDirty());
     }
 
     /**
-     * @return Iterator<string, array{StatusEnum}>
+     * @return Iterator<string, array{InvoiceStatus}>
      */
     public static function statusesOtherThanSending(): Iterator
     {
-        yield 'draft' => [StatusEnum::Draft];
-        yield 'sent to client' => [StatusEnum::SentToClient];
+        yield 'draft' => [InvoiceStatus::Draft];
+        yield 'sent to client' => [InvoiceStatus::SentToClient];
     }
 
     #[DataProvider('statusesOtherThanSending')]
-    public function test_mark_as_sent_to_client_throws_when_not_sending(StatusEnum $status): void
+    public function test_mark_as_sent_to_client_throws_when_not_sending(InvoiceStatus $status): void
     {
         $invoice = Invoice::factory()->inStatus($status)->create();
 
@@ -197,8 +197,8 @@ final class InvoiceTransitionsTest extends TestCase
             InvalidInvoiceStatusTransition::class,
             sprintf('Invoice %s cannot move from sending to sending.', $first->id),
         );
-        self::assertSame(StatusEnum::Sending, $second->status);
-        self::assertSame(StatusEnum::Sending, $first->fresh()?->status);
+        self::assertSame(InvoiceStatus::Sending, $second->status);
+        self::assertSame(InvoiceStatus::Sending, $first->fresh()?->status);
     }
 
     public function test_mark_as_sent_to_client_claims_the_row_only_once(): void
@@ -213,8 +213,8 @@ final class InvoiceTransitionsTest extends TestCase
             InvalidInvoiceStatusTransition::class,
             sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $first->id),
         );
-        self::assertSame(StatusEnum::SentToClient, $second->status);
-        self::assertSame(StatusEnum::SentToClient, $first->fresh()?->status);
+        self::assertSame(InvoiceStatus::SentToClient, $second->status);
+        self::assertSame(InvoiceStatus::SentToClient, $first->fresh()?->status);
     }
 
     /**
@@ -230,7 +230,7 @@ final class InvoiceTransitionsTest extends TestCase
         $first->markAsSending();
 
         $this->assertThrows(fn () => $second->markAsSending(), InvalidInvoiceStatusTransition::class);
-        self::assertSame(StatusEnum::Sending, $second->status);
+        self::assertSame(InvoiceStatus::Sending, $second->status);
         self::assertSame(['customer_name' => 'Unsaved'], $second->getDirty());
     }
 

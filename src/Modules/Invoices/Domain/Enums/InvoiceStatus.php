@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Invoices\Domain\Enums;
 
-enum StatusEnum: string
+enum InvoiceStatus: string
 {
     case Draft = 'draft';
     case Sending = 'sending';

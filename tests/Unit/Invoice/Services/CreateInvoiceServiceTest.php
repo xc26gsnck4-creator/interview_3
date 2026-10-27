@@ -7,7 +7,7 @@ namespace Tests\Unit\Invoice\Services;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Application\Services\CreateInvoiceService;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
@@ -27,7 +27,7 @@ final class CreateInvoiceServiceTest extends TestCase
             ],
         ));
 
-        self::assertSame(StatusEnum::Draft, $invoice->status);
+        self::assertSame(InvoiceStatus::Draft, $invoice->status);
         self::assertSame(3300, $invoice->totalPrice());
         self::assertTrue($invoice->relationLoaded('productLines'));
         self::assertSame(['Consulting', 'Hosting'], $invoice->productLines->pluck('name')->all());
@@ -59,7 +59,7 @@ final class CreateInvoiceServiceTest extends TestCase
             customerEmail: 'billing@acme.test',
         ));
 
-        self::assertSame(StatusEnum::Draft, $invoice->status);
+        self::assertSame(InvoiceStatus::Draft, $invoice->status);
         self::assertSame(0, $invoice->totalPrice());
         self::assertTrue($invoice->relationLoaded('productLines'));
         self::assertCount(0, $invoice->productLines);

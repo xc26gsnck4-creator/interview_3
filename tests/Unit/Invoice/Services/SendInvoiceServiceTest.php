@@ -8,7 +8,7 @@ use Error;
 use Iterator;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
 use Modules\Invoices\Application\Services\SendInvoiceService;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Models\Invoice;
@@ -50,7 +50,7 @@ final class SendInvoiceServiceTest extends TestCase
         self::assertSame(sprintf('Your invoice %s for a total of 123.05 is ready.', $invoice->id), $notification->message);
 
         self::assertSame($invoice->id, $sent->id);
-        self::assertSame(StatusEnum::Sending, $sent->status);
+        self::assertSame(InvoiceStatus::Sending, $sent->status);
         self::assertTrue($sent->relationLoaded('productLines'));
         self::assertSame(['Consulting', 'Hosting'], $sent->productLines->pluck('name')->all());
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
