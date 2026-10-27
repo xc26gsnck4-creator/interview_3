@@ -86,6 +86,7 @@ final class CreateInvoiceTest extends TestCase
         yield 'lines key absent' => [Arr::except(self::PAYLOAD, ['product_lines'])];
         yield 'null lines' => [[...self::PAYLOAD, 'product_lines' => null]];
         yield 'empty lines array' => [[...self::PAYLOAD, 'product_lines' => []]];
+        yield 'blank lines string' => [[...self::PAYLOAD, 'product_lines' => '   ']];
     }
 
     /**

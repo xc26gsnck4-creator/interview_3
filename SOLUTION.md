@@ -75,8 +75,8 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
 | **Create** `POST /api/invoices` | | | |
-| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` not a list, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
-| No `product_lines`, `null` or `[]` (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
+| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` a non-blank string, a number or an object not keyed `"0"`, `"1"`, …, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
+| No `product_lines`, `null`, `[]` or a blank string (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
 | A form body, a body not marked as JSON, malformed JSON | 422 | nothing stored | [`CreateInvoiceTest`] |
 | Lines whose total overflows PHP's int | 422 on `product_lines` | nothing stored | [`CreateInvoiceTest`] |
 | **Show** `GET /api/invoices/{id}` | | | |
@@ -118,7 +118,7 @@ Decision 5 was confirmed knowing these consequences:
 - Totals are integers in minor units up to 2^63−1, so a client must parse integers above 2^53 exactly. JavaScript's `JSON.parse` rounds them; use a BigInt-aware parser.
 - Quiet saves (`saveQuietly()`, `createQuietly()`) and query-builder writes bypass the model rules, and the schema is fixed by the task, so there is no CHECK constraint behind them. The send rule re-checks the stored line amounts, so an invalid line written that way cannot be sent.
 - Product lines stay editable through the model after the invoice leaves draft. No endpoint edits them, but nothing freezes them either.
-- Laravel decodes JSON objects into PHP arrays and trims strings before the create rules run. For `product_lines`, `{}` reads as `[]` and an object keyed `"0"`, `"1"`, … as a list. `api.json`'s `maxLength: 255` applies to the trimmed text, so a 255-character name after a tab is accepted and stored trimmed.
+- Laravel decodes JSON objects into PHP arrays, trims strings and turns empty ones into `null` before the create rules run. For `product_lines`, `{}` reads as `[]`, an object keyed `"0"`, `"1"`, … as a list and a blank string as `null`. `api.json`'s `maxLength: 255` applies to the trimmed text, so a 255-character name after a tab is accepted and stored trimmed.
 
 ## Running the checks
 
