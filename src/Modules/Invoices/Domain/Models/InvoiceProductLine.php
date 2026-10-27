@@ -51,7 +51,8 @@ final class InvoiceProductLine extends Model
 
     /**
      * The amounts rule as a check instead of a rejection, so the send rule also
-     * catches a row written past the model events.
+     * catches a row written past the model events. It reads the cast integers:
+     * a stored value PHP cannot cast to int throws instead.
      */
     public function hasValidAmounts(): bool
     {
@@ -87,8 +88,9 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * The value is null on a new line whose amount was never set: the integer
-     * cast leaves null alone.
+     * The value is null on a new line whose amount is unset or set to null: the
+     * integer cast leaves null alone. The NOT NULL column keeps null out of
+     * stored rows.
      */
     private static function isValidAmount(?int $value): bool
     {

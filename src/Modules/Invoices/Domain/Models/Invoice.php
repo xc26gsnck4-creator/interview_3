@@ -100,7 +100,7 @@ final class Invoice extends Model
      * The send rule, also usable as a dry check. The status is checked first.
      * The stored line amounts are checked again although model writes already
      * guarantee them, so the rule also catches a row written past the model
-     * events.
+     * events whose amount reads as an integer out of range.
      */
     public function ensureCanBeSent(): void
     {
@@ -194,10 +194,9 @@ final class Invoice extends Model
      * original afterwards and a later save() does not write the status again.
      * A lost claim takes over only the stored status, leaving the instance's
      * other attributes and relations alone. The re-read sees the current row:
-     * inside a transaction this connection holds
-     * SQLite's write lock by now, taken at BEGIN when transactions begin
-     * IMMEDIATE and by the zero-row update otherwise; outside one the update has
-     * already committed.
+     * inside a transaction this connection holds SQLite's write lock by now,
+     * taken at BEGIN when transactions begin IMMEDIATE and by the zero-row
+     * update otherwise; outside one the update has already committed.
      * Both queries run on this instance's connection.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
