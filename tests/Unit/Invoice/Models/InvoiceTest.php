@@ -69,23 +69,6 @@ final class InvoiceTest extends TestCase
         self::assertSame(3300, $invoice->totalPrice());
     }
 
-    public function test_factory_states_persist_their_status(): void
-    {
-        $sending = Invoice::factory()->sending()->create();
-        $sent = Invoice::factory()->sentToClient()->create();
-
-        self::assertSame(StatusEnum::Sending, $sending->fresh()?->status);
-        self::assertSame(StatusEnum::SentToClient, $sent->fresh()?->status);
-    }
-
-    public function test_with_lines_attaches_the_requested_number_of_lines(): void
-    {
-        $invoice = Invoice::factory()->withLines(3)->create();
-
-        self::assertCount(3, $invoice->productLines);
-        $this->assertDatabaseCount('invoice_product_lines', 3);
-    }
-
     public function test_new_invoice_cannot_be_saved_with_a_non_draft_status(): void
     {
         $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
@@ -97,14 +80,6 @@ final class InvoiceTest extends TestCase
             'An invoice must be created as draft, sending given.',
         );
         $this->assertDatabaseCount('invoices', 0);
-    }
-
-    public function test_factory_states_combine_with_lines(): void
-    {
-        $invoice = Invoice::factory()->sending()->withLines(2)->create();
-
-        self::assertSame(StatusEnum::Sending, $invoice->fresh()?->status);
-        $this->assertDatabaseCount('invoice_product_lines', 2);
     }
 
     public function test_new_invoice_cannot_be_saved_with_a_null_status(): void

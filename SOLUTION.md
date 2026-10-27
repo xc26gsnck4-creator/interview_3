@@ -25,7 +25,7 @@ src/Modules/Invoices/
                      JSON resources, routes
 ```
 
-Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guards (strict Eloquent outside production, no destructive database commands in production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
+Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guard (strict Eloquent outside production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
@@ -60,7 +60,7 @@ flowchart TD;
 
 ## Testing strategy
 
-Each test sits at the layer that owns the behaviour and runs on a real SQLite engine (in memory, or a temporary file where locks matter). Apart from the notification facade, little is replaced.
+Each test sits at the layer that owns the behaviour and runs on a real SQLite engine (in memory, or a temporary file where locks matter). Apart from the notification facade, little is replaced. A decision is tested in full where it is made: the model for the rules and the transitions from every status, the listener for which rejections it tolerates, the send service for wrapping the facade's `\Error`. Each layer above keeps one case of it, which proves that the layer calls the rule and maps its result.
 
 - **Models** (`tests/Unit/Invoice/Models`): every rule and transition: draft-only creation, the line amounts at their bounds, totals and their overflow, the send rule's order of checks, and each transition from every status. The atomic claim stands in for a concurrency test: two instances of the same invoice claim it, the stale second one's conditional update hits zero rows and throws, and the row moves once.
 - **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification, a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
@@ -86,12 +86,12 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Unknown id | 404 | – | [`SendInvoiceTest`] |
 | Invoice in `sending` or `sent-to-client` | 409 | unchanged | [`SendInvoiceTest`] |
 | Second send of the same invoice | 409, one notification in total | `sending` | [`SendInvoiceTest`] |
-| No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
-| The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
+| No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] (no lines), [`InvoiceTransitionsTest`] (an invalid stored line) |
+| The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`], [`SendInvoiceServiceTest`] (the `\Error`) |
 | The commit fails after the notification | 500, reported; sending again notifies again | `draft` | [`DatabaseLockedTest`] |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
-| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`DeliveryWebhookTest`], [`InvoiceLifecycleTest`] |
+| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
@@ -193,3 +193,5 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [`DeliveryWebhookTest`]: tests/Feature/Invoice/DeliveryWebhookTest.php
 [`InvoiceLifecycleTest`]: tests/Feature/Invoice/InvoiceLifecycleTest.php
 [`DatabaseLockedRendererTest`]: tests/Unit/Exceptions/DatabaseLockedRendererTest.php
+[`InvoiceTransitionsTest`]: tests/Unit/Invoice/Models/InvoiceTransitionsTest.php
+[`SendInvoiceServiceTest`]: tests/Unit/Invoice/Services/SendInvoiceServiceTest.php

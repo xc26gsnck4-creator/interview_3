@@ -6,14 +6,10 @@ namespace Tests\Unit\Invoice\Services;
 
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Iterator;
 use Modules\Invoices\Application\Services\MarkInvoiceDeliveredService;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
-use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Models\Invoice;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class MarkInvoiceDeliveredServiceTest extends TestCase
@@ -29,38 +25,16 @@ final class MarkInvoiceDeliveredServiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
     }
 
-    public function test_throws_not_found_for_unknown_id(): void
+    public function test_throws_transition_when_not_sending(): void
     {
-        Invoice::factory()->withLines()->sending()->create();
-        $unknownId = (string) Str::uuid7();
-
-        $this->assertThrows(
-            fn (): Invoice => $this->service()->handle($unknownId),
-            InvoiceNotFound::class,
-            sprintf('Invoice %s was not found.', $unknownId),
-        );
-    }
-
-    /**
-     * @return Iterator<string, array{StatusEnum}>
-     */
-    public static function statusesOtherThanSending(): Iterator
-    {
-        yield 'draft' => [StatusEnum::Draft];
-        yield 'sent to client' => [StatusEnum::SentToClient];
-    }
-
-    #[DataProvider('statusesOtherThanSending')]
-    public function test_throws_transition_when_not_sending(StatusEnum $status): void
-    {
-        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
+        $invoice = Invoice::factory()->withLines()->create();
 
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from %s to sent-to-client.', $invoice->id, $status->value),
+            sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
         );
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
     /**
