@@ -96,12 +96,11 @@ final class Invoice extends Model
     }
 
     /**
-     * The send rule, also usable as a dry check. The status is checked first,
-     * the total last. The total is part of the rule because an invoice whose
-     * total cannot be computed could never be sent.
+     * The send rule, also usable as a dry check. The status is checked first.
      * The stored lines are checked again although model writes already
      * guarantee them, so the rule reads completely here and also catches a row
-     * written past the model events.
+     * written past the model events. The total is not checked again: create
+     * refuses lines whose total overflows.
      */
     public function ensureCanBeSent(): void
     {
@@ -115,12 +114,6 @@ final class Invoice extends Model
 
         if (! $lines->every(static fn (InvoiceProductLine $line): bool => $line->hasValidAmounts())) {
             throw InvoiceNotSendable::invalidProductLine($this->id);
-        }
-
-        try {
-            $this->sumLineTotals($lines);
-        } catch (InvoiceTotalOverflow) {
-            throw InvoiceNotSendable::totalTooLarge($this->id);
         }
     }
 

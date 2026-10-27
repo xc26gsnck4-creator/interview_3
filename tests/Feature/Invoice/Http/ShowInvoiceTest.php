@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Str;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
-use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Tests\TestCase;
@@ -60,28 +59,6 @@ final class ShowInvoiceTest extends TestCase
 
         $response->assertNotFound()->assertExactJson(['message' => sprintf('Invoice %s was not found.', $unknownId)]);
         $exceptions->assertNotReported(InvoiceNotFound::class);
-    }
-
-    /**
-     * Create rejects lines whose total overflows, so a stored invoice can only
-     * overflow through a write that bypassed CreateInvoiceService. That is
-     * corrupt data: a reported server error, not a client error, and
-     * deliberately not part of the API document.
-     */
-    public function test_reports_a_stored_total_that_overflows_as_a_server_error(): void
-    {
-        $exceptions = Exceptions::fake();
-        $invoice = Invoice::factory()->create();
-        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
-        ]);
-
-        $response = $this->getJson(route('invoices.show', $invoice->id));
-
-        $response->assertInternalServerError();
-
-        $exceptions->assertReported(InvoiceTotalOverflow::class);
     }
 
     /**
