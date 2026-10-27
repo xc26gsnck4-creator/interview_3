@@ -62,8 +62,8 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * The amounts are read as given, not through the integer cast, which would
-     * turn 1.5 into 1 and let the fraction reach the database.
+     * The integer cast would turn 1.5 into 1 and let the fraction reach the
+     * database, so the amounts are checked as given.
      */
     protected static function booted(): void
     {
@@ -71,8 +71,10 @@ final class InvoiceProductLine extends Model
             $attributes = $line->getAttributes();
 
             foreach (['quantity', 'unit_price'] as $field) {
-                if (! self::isValidAmount($attributes[$field] ?? null)) {
-                    throw InvalidProductLine::outOfRange($field, $attributes[$field] ?? null);
+                $value = $attributes[$field] ?? null;
+
+                if (! self::isValidAmount($value)) {
+                    throw InvalidProductLine::outOfRange($field, $value);
                 }
             }
         };

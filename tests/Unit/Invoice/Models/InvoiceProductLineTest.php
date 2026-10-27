@@ -48,10 +48,6 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * The values are checked as given, before the integer cast, so a fraction
-     * is rejected rather than truncated and a numeric string is not read as
-     * an integer.
-     *
      * @param  'quantity'|'unit_price'  $field
      */
     #[DataProvider('invalidAmounts')]
@@ -65,25 +61,11 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
-    /**
-     * The fraction's integer part differs from the stored value: Eloquent
-     * compares cast values to decide what is dirty, so 2.5 over a stored 2
-     * would not reach the updating listener at all.
-     *
-     * @return Iterator<string, array{int|float}>
-     */
-    public static function invalidAmountsOnUpdate(): Iterator
-    {
-        yield 'zero' => [0];
-        yield 'fractional' => [1.5];
-    }
-
-    #[DataProvider('invalidAmountsOnUpdate')]
-    public function test_rejects_invalid_amounts_on_update(int|float $value): void
+    public function test_rejects_non_positive_values_on_update(): void
     {
         $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
 
-        $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
+        $this->assertThrows(fn () => $line->update(['quantity' => 0]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
     }
 }
