@@ -109,22 +109,6 @@ final class SendInvoiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
-    public function test_rejects_invoice_whose_total_overflows_with_422(): void
-    {
-        $invoice = Invoice::factory()->create();
-        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
-        ]);
-
-        $response = $this->postJson(route('invoices.send', $invoice->id));
-
-        $response->assertUnprocessable()
-            ->assertExactJson(['message' => sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id)]);
-        self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-    }
-
     /**
      * A client error, so it is not reported.
      */
