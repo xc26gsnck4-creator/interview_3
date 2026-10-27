@@ -6,7 +6,6 @@
     "license": "MIT",
     "require": {
         "php": "^8.5",
-        "ext-pdo": "*",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
         "psr/log": "^3.0",

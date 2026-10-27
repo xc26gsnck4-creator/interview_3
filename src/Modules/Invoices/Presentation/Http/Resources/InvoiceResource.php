@@ -11,7 +11,7 @@ use Override;
 
 /**
  * The services hand over the invoice with its lines loaded, so the total
- * matches `product_lines` and nothing is read after a commit.
+ * matches `product_lines`.
  *
  * @property-read Invoice $resource
  */
