@@ -23,8 +23,8 @@ final class InvoiceProductLineResource extends JsonResource
         return [
             'id' => $this->resource->id,
             'name' => $this->resource->name,
-            'quantity' => $this->resource->quantity,
-            'unit_price' => $this->resource->unit_price,
+            'quantity' => $this->resource->quantity->value,
+            'unit_price' => $this->resource->unit_price->value,
             'total_unit_price' => $this->resource->totalUnitPrice(),
         ];
     }

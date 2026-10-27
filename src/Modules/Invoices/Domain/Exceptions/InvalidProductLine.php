@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\Invoices\Domain\Exceptions;
 
 use DomainException;
-use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 
 final class InvalidProductLine extends DomainException
 {
@@ -14,7 +14,7 @@ final class InvalidProductLine extends DomainException
         return new self(sprintf(
             'Product line %s must be an integer between 1 and %d, %s given.',
             $field,
-            InvoiceProductLine::MAX_VALUE,
+            Amount::MAX,
             var_export($value, true),
         ));
     }

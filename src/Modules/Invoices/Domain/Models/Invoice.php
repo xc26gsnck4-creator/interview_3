@@ -63,7 +63,7 @@ final class Invoice extends Model
     }
 
     /**
-     * A line total always fits in int (InvoiceProductLine::MAX_VALUE caps both
+     * A line total always fits in int (Amount::MAX caps both
      * factors), but the sum may not, so only the addition is checked.
      */
     public function totalPrice(): int

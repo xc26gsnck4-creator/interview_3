@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 
 /**
  * `invoice_id` is deliberately not fillable: lines are created through
@@ -19,8 +19,8 @@ use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
  * @property string $id
  * @property string $invoice_id
  * @property string $name
- * @property int $quantity
- * @property int $unit_price
+ * @property Amount $quantity
+ * @property Amount $unit_price
  */
 #[Fillable(['name', 'quantity', 'unit_price'])]
 final class InvoiceProductLine extends Model
@@ -29,11 +29,6 @@ final class InvoiceProductLine extends Model
     use HasFactory;
 
     use HasUuids;
-
-    /**
-     * 2^31 - 1, so quantity * unit_price always fits in PHP's int.
-     */
-    public const int MAX_VALUE = 2_147_483_647;
 
     /**
      * @return BelongsTo<Invoice, $this>
@@ -45,17 +40,17 @@ final class InvoiceProductLine extends Model
 
     public function totalUnitPrice(): int
     {
-        return $this->quantity * $this->unit_price;
+        return $this->quantity->value * $this->unit_price->value;
     }
 
     /**
-     * Read as given, like the listener, so a stored fraction is not sendable.
+     * Read as given, like the cast, so a stored fraction is not sendable.
      */
     public function hasValidAmounts(): bool
     {
         $attributes = $this->getAttributes();
 
-        return self::isValidAmount($attributes['quantity'] ?? null) && self::isValidAmount($attributes['unit_price'] ?? null);
+        return Amount::tryFrom($attributes['quantity'] ?? null) instanceof Amount && Amount::tryFrom($attributes['unit_price'] ?? null) instanceof Amount;
     }
 
     /**
@@ -63,35 +58,6 @@ final class InvoiceProductLine extends Model
      */
     protected function casts(): array
     {
-        return ['quantity' => 'integer', 'unit_price' => 'integer'];
-    }
-
-    /**
-     * The integer cast would turn 1.5 into 1 and let the fraction reach the
-     * database, so the amounts are checked as given: on saving, before
-     * Eloquent's cast-based dirty comparison can drop the change, and on
-     * updating, the only event increment() and decrement() fire.
-     */
-    protected static function booted(): void
-    {
-        $assertValidAmounts = static function (InvoiceProductLine $line): void {
-            $attributes = $line->getAttributes();
-
-            foreach (['quantity', 'unit_price'] as $field) {
-                $value = $attributes[$field] ?? null;
-
-                if (! self::isValidAmount($value)) {
-                    throw InvalidProductLine::invalidAmount($field, $value);
-                }
-            }
-        };
-
-        self::saving($assertValidAmounts);
-        self::updating($assertValidAmounts);
-    }
-
-    private static function isValidAmount(mixed $value): bool
-    {
-        return is_int($value) && $value >= 1 && $value <= self::MAX_VALUE;
+        return ['quantity' => Amount::class, 'unit_price' => Amount::class];
     }
 }

@@ -27,31 +27,27 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 1);
 
         $fresh = InvoiceProductLine::query()->findOrFail($line->id);
-        self::assertSame(1, $fresh->quantity);
-        self::assertSame(1, $fresh->unit_price);
+        self::assertSame(1, $fresh->quantity->value);
+        self::assertSame(1, $fresh->unit_price->value);
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', int|float|string|null, string}>
+     * The bounds live in AmountTest; these two pin that the cast checks the
+     * value as given, before any integer conversion.
+     *
+     * @return Iterator<string, array{'quantity'|'unit_price', float|string, string}>
      */
     public static function invalidAmounts(): Iterator
     {
-        yield 'quantity zero' => ['quantity', 0, '0'];
-        yield 'quantity negative' => ['quantity', -1, '-1'];
-        yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
         yield 'quantity fractional' => ['quantity', 1.5, '1.5'];
-        yield 'unit price zero' => ['unit_price', 0, '0'];
-        yield 'unit price negative' => ['unit_price', -1, '-1'];
-        yield 'unit price above MAX_VALUE' => ['unit_price', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
         yield 'unit price as text' => ['unit_price', '2', "'2'"];
-        yield 'unit price null' => ['unit_price', null, 'NULL'];
     }
 
     /**
      * @param  'quantity'|'unit_price'  $field
      */
     #[DataProvider('invalidAmounts')]
-    public function test_rejects_amounts_that_are_not_integers_in_range(string $field, int|float|string|null $value, string $renderedValue): void
+    public function test_rejects_amounts_that_are_not_integers_in_range(string $field, float|string $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
@@ -62,8 +58,8 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * The listener runs on every save of a stored line, so it must accept the
-     * amounts as the driver returns them.
+     * The cast reads what the driver returns, so a loaded line can be saved
+     * again.
      */
     public function test_updates_a_valid_amount(): void
     {
@@ -75,30 +71,21 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * The fraction keeps the stored integer part: Eloquent's dirty comparison
-     * reads both through the cast and sees no change, so only a check that
-     * runs before it, on saving, can reject the value.
-     *
-     * @return Iterator<string, array{int, int|float}>
+     * The fraction keeps the stored integer part, so a check after Eloquent's
+     * cast-based dirty comparison would see no change; the cast rejects it at
+     * assignment.
      */
-    public static function invalidAmountsOnUpdate(): Iterator
+    public function test_rejects_a_fraction_on_update(): void
     {
-        yield 'zero' => [2, 0];
-        yield 'fraction with the stored integer part' => [1, 1.5];
-    }
+        $line = InvoiceProductLine::factory()->create(['quantity' => 1]);
 
-    #[DataProvider('invalidAmountsOnUpdate')]
-    public function test_rejects_invalid_amounts_on_update(int $stored, int|float $value): void
-    {
-        $line = InvoiceProductLine::factory()->create(['quantity' => $stored]);
-
-        $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
-        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => $stored]);
+        $this->assertThrows(fn () => $line->update(['quantity' => 1.5]), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
     }
 
     /**
-     * decrement() fires updating only, never saving, so the check must be
-     * registered there too.
+     * decrement() computes the new amount through the cast, so a result below
+     * one is rejected like any other assignment.
      */
     public function test_rejects_a_decrement_below_one(): void
     {
