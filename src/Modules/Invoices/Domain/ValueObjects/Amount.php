@@ -8,9 +8,7 @@ use Illuminate\Contracts\Database\Eloquent\Castable;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Contracts\Database\Eloquent\DeviatesCastableAttributes;
 use Illuminate\Database\Eloquent\Model;
-use InvalidArgumentException;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
-use UnexpectedValueException;
 
 /**
  * A line quantity or unit price: an integer from 1 to 2^31 - 1, so that
@@ -22,16 +20,9 @@ final readonly class Amount implements Castable
 
     private function __construct(public int $value) {}
 
-    public static function fromInt(int $value): self
-    {
-        return self::tryFrom($value) ?? throw new InvalidArgumentException(
-            sprintf('An amount must be an integer between 1 and %d, %d given.', self::MAX, $value),
-        );
-    }
-
     /**
-     * Null for anything that is not an integer in range, read as given: a
-     * fraction or a numeric string is not an amount.
+     * Read as given: a fraction or a numeric string is not an amount, so
+     * neither is coerced.
      */
     public static function tryFrom(mixed $value): ?self
     {
@@ -55,7 +46,7 @@ final readonly class Amount implements Castable
              */
             public function get(Model $model, string $key, mixed $value, array $attributes): Amount
             {
-                return $this->stored($key, $value);
+                return $this->amount($key, $value);
             }
 
             /**
@@ -63,21 +54,18 @@ final readonly class Amount implements Castable
              */
             public function set(Model $model, string $key, mixed $value, array $attributes): int
             {
-                $amount = $value instanceof Amount ? $value : Amount::tryFrom($value);
-
-                if ($amount === null) {
-                    throw InvalidProductLine::invalidAmount($key, $value);
-                }
-
-                return $amount->value;
+                return ($value instanceof Amount ? $value : $this->amount($key, $value))->value;
             }
 
             /**
+             * Eloquent runs the step through set() before the query as well, so
+             * a step is itself an amount.
+             *
              * @param  array<array-key, mixed>  $attributes
              */
             public function increment(mixed $model, string $key, mixed $value, array $attributes): int
             {
-                return $this->stored($key, $attributes[$key] ?? null)->value + $this->step($value);
+                return $this->amount($key, $attributes[$key] ?? null)->value + $this->amount($key, $value)->value;
             }
 
             /**
@@ -85,21 +73,12 @@ final readonly class Amount implements Castable
              */
             public function decrement(mixed $model, string $key, mixed $value, array $attributes): int
             {
-                return $this->stored($key, $attributes[$key] ?? null)->value - $this->step($value);
+                return $this->amount($key, $attributes[$key] ?? null)->value - $this->amount($key, $value)->value;
             }
 
-            private function stored(string $key, mixed $value): Amount
+            private function amount(string $key, mixed $value): Amount
             {
-                return Amount::tryFrom($value) ?? throw new UnexpectedValueException(
-                    sprintf('Stored %s is not an amount: %s.', $key, var_export($value, true)),
-                );
-            }
-
-            private function step(mixed $value): int
-            {
-                return is_int($value) ? $value : throw new InvalidArgumentException(
-                    sprintf('An amount changes by an integer, %s given.', var_export($value, true)),
-                );
+                return Amount::tryFrom($value) ?? throw InvalidProductLine::invalidAmount($key, $value);
             }
         };
     }

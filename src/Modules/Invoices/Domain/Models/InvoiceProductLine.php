@@ -44,13 +44,14 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Read as given, like the cast, so a stored fraction is not sendable.
+     * Read as given, not through the cast, which throws on a stored fraction:
+     * the send rule answers 422 for such a row, not 500.
      */
     public function hasValidAmounts(): bool
     {
         $attributes = $this->getAttributes();
 
-        return Amount::tryFrom($attributes['quantity'] ?? null) instanceof Amount && Amount::tryFrom($attributes['unit_price'] ?? null) instanceof Amount;
+        return Amount::tryFrom($attributes['quantity'] ?? null) !== null && Amount::tryFrom($attributes['unit_price'] ?? null) !== null;
     }
 
     /**

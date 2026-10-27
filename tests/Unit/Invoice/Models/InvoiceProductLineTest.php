@@ -47,7 +47,7 @@ final class InvoiceProductLineTest extends TestCase
      * @param  'quantity'|'unit_price'  $field
      */
     #[DataProvider('invalidAmounts')]
-    public function test_rejects_amounts_that_are_not_integers_in_range(string $field, float|string $value, string $renderedValue): void
+    public function test_rejects_an_amount_that_is_not_an_integer_as_given(string $field, float|string $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
@@ -71,9 +71,9 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * The fraction keeps the stored integer part, so a check after Eloquent's
-     * cast-based dirty comparison would see no change; the cast rejects it at
-     * assignment.
+     * 1.5 over a stored 1 is the update the integer cast once dropped as
+     * unchanged; the cast rejects it at assignment, before Eloquent compares
+     * anything.
      */
     public function test_rejects_a_fraction_on_update(): void
     {
