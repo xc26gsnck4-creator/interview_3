@@ -118,7 +118,7 @@ Decision 5 was confirmed knowing these consequences:
 - Totals are integers in minor units up to 2^63−1, so a client must parse integers above 2^53 exactly. JavaScript's `JSON.parse` rounds them; use a BigInt-aware parser.
 - Quiet saves (`saveQuietly()`, `createQuietly()`) and query-builder writes bypass the model rules, and the schema is fixed by the task, so there is no CHECK constraint behind them. The send rule re-checks the stored line amounts, so an invalid line written that way cannot be sent.
 - Product lines stay editable through the model after the invoice leaves draft. No endpoint edits them, but nothing freezes them either.
-- Laravel decodes JSON objects into PHP arrays, trims strings and turns empty ones into `null` before the create rules run. For `product_lines`, `{}` reads as `[]`, an object keyed `"0"`, `"1"`, … as a list and a blank string as `null`. `api.json`'s `maxLength: 255` applies to the trimmed text, so a 255-character name after a tab is accepted and stored trimmed.
+- Laravel decodes JSON objects into PHP arrays, trims strings and turns empty ones into `null` before the create rules run. For `product_lines`, `{}` reads as `[]`, an object keyed `"0"`, `"1"`, … as a list and a blank string as `null`. The rules check the trimmed text, while `api.json` describes the text as sent: a 255-character name after a tab breaks the document's `maxLength: 255` but is accepted and stored trimmed, and a blank name fits the document (no `minLength`) but answers 422.
 
 ## Running the checks
 
