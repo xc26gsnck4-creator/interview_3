@@ -44,14 +44,13 @@ final class InvoiceFactory extends Factory
     }
 
     /**
-     * Explicit test-only bypass of the creation invariant: invoices are created
-     * as draft and then moved to the requested status without model events.
-     * Draft leaves the invoice as created.
+     * Test-only shortcut past the transitions: invoices are created as draft and
+     * then saved with the requested status. Draft leaves the invoice as created.
      */
     public function inStatus(StatusEnum $status): self
     {
         return $this->afterCreating(static function (Invoice $invoice) use ($status): void {
-            $invoice->forceFill(['status' => $status])->saveQuietly();
+            $invoice->forceFill(['status' => $status])->save();
         });
     }
 
