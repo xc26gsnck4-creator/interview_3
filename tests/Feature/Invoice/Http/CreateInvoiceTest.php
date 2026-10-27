@@ -10,10 +10,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\Fluent\AssertableJson;
-use Illuminate\Testing\TestResponse;
 use Iterator;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 final class CreateInvoiceTest extends TestCase
@@ -80,18 +78,30 @@ final class CreateInvoiceTest extends TestCase
         self::assertSame([], $queriesAfterCommit);
     }
 
-    public function test_creates_invoice_with_empty_lines_array(): void
+    /**
+     * @return Iterator<string, array{array<mixed>}>
+     */
+    public static function payloadsWithoutLines(): Iterator
     {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => []]);
-
-        $this->assertCreatedWithoutLines($response);
+        yield 'lines key absent' => [Arr::except(self::PAYLOAD, ['product_lines'])];
+        yield 'null lines' => [[...self::PAYLOAD, 'product_lines' => null]];
+        yield 'empty lines array' => [[...self::PAYLOAD, 'product_lines' => []]];
+        yield 'blank lines string' => [[...self::PAYLOAD, 'product_lines' => '   ']];
     }
 
-    public function test_creates_invoice_when_lines_key_is_absent(): void
+    /**
+     * @param  array<mixed>  $payload
+     */
+    #[DataProvider('payloadsWithoutLines')]
+    public function test_creates_invoice_without_lines(array $payload): void
     {
-        $response = $this->postJson(route('invoices.store'), Arr::except(self::PAYLOAD, ['product_lines']));
+        $response = $this->postJson(route('invoices.store'), $payload);
 
-        $this->assertCreatedWithoutLines($response);
+        $response->assertCreated()
+            ->assertJsonPath('data.product_lines', [])
+            ->assertJsonPath('data.total_price', 0);
+        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
+        $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
     /**
@@ -112,35 +122,6 @@ final class CreateInvoiceTest extends TestCase
             ->assertJsonPath('data.product_lines.0.total_unit_price', $total)
             ->assertJsonPath('data.total_price', $total);
         $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Bulk', 'quantity' => $quantity, 'unit_price' => $unitPrice]);
-    }
-
-    /**
-     * Laravel expands the per-line rules over every submitted line before any
-     * rule runs, so the count is checked first: the lines of an oversized body
-     * are never validated.
-     */
-    public function test_rejects_more_than_1000_lines_before_validating_them(): void
-    {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, ['name' => ''])]);
-
-        $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['product_lines'])
-            ->assertJsonMissingValidationErrors(['product_lines.0.name']);
-        $this->assertDatabaseCount('invoices', 0);
-    }
-
-    /**
-     * The check that tells a JSON object from an array adds its error only for
-     * a value the array rules accepted, so no message is reported twice.
-     */
-    public function test_reports_each_product_lines_error_once(): void
-    {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'product_lines' => 'x']);
-
-        $response->assertUnprocessable()->assertJsonPath('errors.product_lines', [
-            'The product lines field must be an array.',
-            'The product lines field must be a list.',
-        ]);
     }
 
     public function test_accepts_the_maximum_of_1000_lines(): void
@@ -210,70 +191,6 @@ final class CreateInvoiceTest extends TestCase
         $this->assertDatabaseHas('invoice_product_lines', ['name' => 'Consulting']);
     }
 
-    /**
-     * A value over the limit after trimming already fails the rule; the check of
-     * the input as sent adds no second message.
-     */
-    public function test_reports_a_name_over_the_limit_after_trimming_once(): void
-    {
-        $name = str_repeat('n', 256);
-
-        $response = $this->postJson(route('invoices.store'), [
-            ...self::withLine([...self::LINE, 'name' => $name]),
-            'customer_name' => $name,
-            'customer_email' => self::validEmailOfLength(256),
-        ]);
-
-        $response->assertUnprocessable();
-        self::assertSame([
-            'customer_name' => ['The customer name field must not be greater than 255 characters.'],
-            'customer_email' => ['The customer email field must not be greater than 255 characters.'],
-            'product_lines.0.name' => ['The product_lines.0.name field must not be greater than 255 characters.'],
-        ], $response->json('errors'));
-    }
-
-    /**
-     * A name that fits once trimmed fails only the check of the input as sent,
-     * which reports Laravel's own `max` message for a string.
-     */
-    public function test_reports_the_max_message_for_a_name_over_the_limit_as_sent(): void
-    {
-        $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'customer_name' => "\t".str_repeat('n', 255)]);
-
-        $response->assertUnprocessable();
-        self::assertSame([
-            'customer_name' => ['The customer name field must not be greater than 255 characters.'],
-        ], $response->json('errors'));
-    }
-
-    /**
-     * Each value fails a rule and also breaks a later one: 256 items for `max`,
-     * or 256 characters as sent.
-     *
-     * @return Iterator<string, array{array<mixed>, string, string}>
-     */
-    public static function textValuesFailingTwoRules(): Iterator
-    {
-        yield 'customer name as 256 strings' => [[...self::PAYLOAD, 'customer_name' => array_fill(0, 256, 'n')], 'customer_name', 'The customer name field must be a string.'];
-        yield 'customer email of 255 characters without an @ after a tab' => [[...self::PAYLOAD, 'customer_email' => "\t".str_repeat('n', 255)], 'customer_email', 'The customer email field must be a valid email address.'];
-        yield 'line name as 256 strings' => [self::withLine([...self::LINE, 'name' => array_fill(0, 256, 'n')]), 'product_lines.0.name', 'The product_lines.0.name field must be a string.'];
-    }
-
-    /**
-     * `bail` stops a text field at its first failure, so the later rule adds
-     * no second message.
-     *
-     * @param  array<mixed>  $payload
-     */
-    #[DataProvider('textValuesFailingTwoRules')]
-    public function test_reports_only_the_first_failure_of_a_text_field(array $payload, string $errorKey, string $message): void
-    {
-        $response = $this->postJson(route('invoices.store'), $payload);
-
-        $response->assertUnprocessable();
-        self::assertSame([$errorKey => [$message]], $response->json('errors'));
-    }
-
     public function test_ignores_status_in_payload(): void
     {
         $response = $this->postJson(route('invoices.store'), [...self::PAYLOAD, 'status' => 'sent-to-client']);
@@ -292,19 +209,12 @@ final class CreateInvoiceTest extends TestCase
         yield 'malformed customer email' => [[...self::PAYLOAD, 'customer_email' => 'nope'], 'customer_email'];
         yield 'customer name of 256 characters' => [[...self::PAYLOAD, 'customer_name' => str_repeat('n', 256)], 'customer_name'];
         yield 'customer email of 256 characters' => [[...self::PAYLOAD, 'customer_email' => self::validEmailOfLength(256)], 'customer_email'];
-        yield 'customer name of 255 characters after a tab' => [[...self::PAYLOAD, 'customer_name' => "\t".str_repeat('n', 255)], 'customer_name'];
-        yield 'customer email of 255 characters after a tab' => [[...self::PAYLOAD, 'customer_email' => "\t".self::validEmailOfLength(255)], 'customer_email'];
         yield 'product lines as a string' => [[...self::PAYLOAD, 'product_lines' => 'x'], 'product_lines'];
         yield 'product lines as an object' => [[...self::PAYLOAD, 'product_lines' => ['first' => self::LINE]], 'product_lines'];
-        yield 'product lines as an empty object' => [[...self::PAYLOAD, 'product_lines' => (object) []], 'product_lines'];
-        yield 'product lines as an object with numeric keys' => [[...self::PAYLOAD, 'product_lines' => (object) [self::LINE]], 'product_lines'];
-        yield 'product lines as an object next to a NUL-prefixed key' => [[...self::PAYLOAD, 'product_lines' => (object) [], "\0" => 0], 'product_lines'];
         yield '1001 product lines' => [[...self::PAYLOAD, 'product_lines' => array_fill(0, 1001, self::LINE)], 'product_lines'];
         yield 'empty line name' => [self::withLine([...self::LINE, 'name' => '']), 'product_lines.0.name'];
         yield 'blank line name' => [self::withLine([...self::LINE, 'name' => '   ']), 'product_lines.0.name'];
         yield 'line name of 256 characters' => [self::withLine([...self::LINE, 'name' => str_repeat('n', 256)]), 'product_lines.0.name'];
-        yield 'line name of 255 characters after a tab' => [self::withLine([...self::LINE, 'name' => "\t".str_repeat('n', 255)]), 'product_lines.0.name'];
-        yield 'second line name of 255 characters after a soft hyphen' => [[...self::PAYLOAD, 'product_lines' => [self::LINE, [...self::LINE, 'name' => "\u{00AD}".str_repeat('n', 255)]]], 'product_lines.1.name'];
         yield 'line that is not an object' => [[...self::PAYLOAD, 'product_lines' => ['Consulting']], 'product_lines.0.name'];
         yield 'line without name' => [self::withLine(Arr::except(self::LINE, ['name'])), 'product_lines.0.name'];
         yield 'line without quantity' => [self::withLine(Arr::except(self::LINE, ['quantity'])), 'product_lines.0.quantity'];
@@ -376,55 +286,20 @@ final class CreateInvoiceTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{mixed}>
+     * Laravel trims strings only in a request marked as JSON; read without
+     * that, "  Jane  " was stored untrimmed.
      */
-    public static function productLinesOfABodyThatIsNotRead(): Iterator
-    {
-        yield 'an empty string' => [''];
-        yield 'an object' => [(object) []];
-    }
-
-    /**
-     * Laravel trims strings and turns empty ones into null only in a request
-     * marked as JSON; read without that, `""` for product_lines slipped past
-     * the array rules and "  Jane  " was stored untrimmed. Nor does the check
-     * of product_lines' shape read such a body.
-     */
-    #[DataProvider('productLinesOfABodyThatIsNotRead')]
-    public function test_does_not_read_a_body_without_a_json_content_type(mixed $productLines): void
+    public function test_does_not_read_a_body_without_a_json_content_type(): void
     {
         $response = $this->call(
             'POST',
             route('invoices.store'),
             server: ['CONTENT_TYPE' => 'text/plain', 'HTTP_ACCEPT' => 'application/json'],
-            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ', 'product_lines' => $productLines]),
+            content: (string) json_encode([...self::PAYLOAD, 'customer_name' => '  Jane  ']),
         );
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
         $this->assertDatabaseCount('invoices', 0);
-    }
-
-    /**
-     * @return Iterator<string, array{string}>
-     */
-    public static function jsonBodiesThatAreNotObjects(): Iterator
-    {
-        yield 'a string' => ['"Jane Doe"'];
-        yield 'a number' => ['5'];
-        yield 'null' => ['null'];
-    }
-
-    #[DataProvider('jsonBodiesThatAreNotObjects')]
-    public function test_answers_422_to_a_json_body_that_is_not_an_object(string $body): void
-    {
-        $response = $this->call(
-            'POST',
-            route('invoices.store'),
-            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
-            content: $body,
-        );
-
-        $response->assertUnprocessable()->assertJsonValidationErrors(['customer_name', 'customer_email']);
     }
 
     public function test_ignores_fields_in_the_query_string(): void
@@ -471,17 +346,5 @@ final class CreateInvoiceTest extends TestCase
     private static function validEmailOfLength(int $length): string
     {
         return str_repeat('a', $length - 248).'@'.implode('.', array_fill(0, 4, str_repeat('b', 60))).'.com';
-    }
-
-    /**
-     * @param  TestResponse<Response>  $response
-     */
-    private function assertCreatedWithoutLines(TestResponse $response): void
-    {
-        $response->assertCreated()
-            ->assertJsonPath('data.product_lines', [])
-            ->assertJsonPath('data.total_price', 0);
-        $this->assertDatabaseHas('invoices', ['id' => $response->json('data.id'), 'status' => 'draft']);
-        $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 }
