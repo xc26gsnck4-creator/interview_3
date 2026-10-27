@@ -63,12 +63,13 @@ final class InvoiceProductLine extends Model
 
     /**
      * The integer cast would turn 1.5 into 1 and let the fraction reach the
-     * database, so the amounts are checked as given, on saving, before
-     * Eloquent's cast-based dirty comparison can drop the change.
+     * database, so the amounts are checked as given: on saving, before
+     * Eloquent's cast-based dirty comparison can drop the change, and on
+     * updating, the only event increment() and decrement() fire.
      */
     protected static function booted(): void
     {
-        self::saving(static function (InvoiceProductLine $line): void {
+        $assertValidAmounts = static function (InvoiceProductLine $line): void {
             $attributes = $line->getAttributes();
 
             foreach (['quantity', 'unit_price'] as $field) {
@@ -78,7 +79,10 @@ final class InvoiceProductLine extends Model
                     throw InvalidProductLine::invalidAmount($field, $value);
                 }
             }
-        });
+        };
+
+        self::saving($assertValidAmounts);
+        self::updating($assertValidAmounts);
     }
 
     private static function isValidAmount(mixed $value): bool

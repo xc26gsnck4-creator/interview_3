@@ -82,4 +82,16 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => $stored]);
     }
+
+    /**
+     * decrement() fires updating only, never saving, so the check must be
+     * registered there too.
+     */
+    public function test_rejects_a_decrement_below_one(): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => 1]);
+
+        $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
+    }
 }
