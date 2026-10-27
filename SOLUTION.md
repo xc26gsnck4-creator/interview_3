@@ -60,7 +60,7 @@ flowchart TD;
 
 ## Testing strategy
 
-Each decision is tested in full at the layer that makes it, and each layer above keeps at most one case of it, which proves that the layer calls the rule and maps its result. The tests run on a real SQLite engine (in memory, or a temporary file where locks matter), and apart from the notification facade little is replaced.
+Each decision is tested in full at the layer that makes it, and each layer above keeps at most one case of it, which proves that the layer calls the rule and maps its result; the end-to-end lifecycle stories come on top and do not count as a layer. The tests run on a real SQLite engine (in memory, or a temporary file where locks matter), and apart from the notification facade little is replaced.
 
 - **Models** (`tests/Unit/Invoice/Models`): every rule and transition: draft-only creation, the line amounts at their bounds, totals and their overflow, the send rule's order of checks, and each transition from every status. The atomic claim stands in for a concurrency test: two instances of the same invoice claim it, the stale second one's conditional update hits zero rows and throws, and the row moves once.
 - **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification (an `\Error` included), a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
@@ -72,7 +72,7 @@ Each decision is tested in full at the layer that makes it, and each layer above
 
 ## Failure behaviour
 
-The Test column names the test that checks the response; each cause behind a row is tested in full where it is decided (see [Testing strategy](#testing-strategy)).
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)).
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -92,7 +92,7 @@ The Test column names the test that checks the response; each cause behind a row
 | The commit fails after the notification | 500, reported; sending again notifies again | `draft` | [`DatabaseLockedTest`] |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
-| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`DeliveryWebhookTest`], [`InvoiceLifecycleTest`] |
+| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
