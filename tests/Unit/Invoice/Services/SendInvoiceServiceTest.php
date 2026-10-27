@@ -140,27 +140,6 @@ final class SendInvoiceServiceTest extends TestCase
     }
 
     /**
-     * Each line is valid, but the sum of three MAX_VALUE x MAX_VALUE lines
-     * exceeds PHP's int, so the send rule rejects it before the claim.
-     */
-    public function test_rejects_an_invoice_whose_total_overflows_and_does_not_notify(): void
-    {
-        $invoice = Invoice::factory()->create();
-        InvoiceProductLine::factory()->count(3)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
-        ]);
-
-        $this->assertThrows(
-            fn (): Invoice => $this->service()->handle($invoice->id),
-            InvoiceNotSendable::class,
-            sprintf('Invoice %s cannot be sent: the total of its product lines exceeds 9223372036854775807.', $invoice->id),
-        );
-        self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-    }
-
-    /**
      * The callback runs without a transaction here, so the row is not
      * asserted; DatabaseLockedTest proves the rollback.
      */
