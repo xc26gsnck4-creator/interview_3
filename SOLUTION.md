@@ -18,16 +18,16 @@ src/Modules/Invoices/
 │                    StatusEnum; exceptions that know nothing about HTTP
 ├── Application/     one service per use case (create, find, send, mark
 │                    delivered), each with a single handle(); readonly DTOs;
-│                    NotificationFailed and SendNotRecorded
+│                    NotificationFailed
 ├── Infrastructure/  service provider, the webhook listener, the exception
 │                    to HTTP status map
 └── Presentation/    controller (one service call per action), form request,
                      JSON resources, routes
 ```
 
-Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: strict Eloquent outside production, `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
+Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: `AppServiceProvider`, which makes Eloquent strict outside production.
 
-SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
+SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 8 answer SQLite's locking. ([#11])
 
 Allowed dependencies, drawn by hand. phpat rules that PHPStan runs (`tests/Architecture/InvoicesArchitectureRules.php`) keep the Invoices layers pointing inwards, let only Application and Infrastructure reach Notifications, through its `Api`, keep Notifications from depending on Invoices, let only the Domain name the factories, and keep `app/` (not drawn) apart from the modules and the factories. Not checked: the arrows inside the Notifications module, the factories' arrows into the modules, and `routes.php`, which is not a class. The models name their factories only in the `@use HasFactory<…>` PHPDoc, hence the dotted arrow:
 
@@ -53,26 +53,25 @@ flowchart TD;
 4. **Strict services, tolerant listener.** The services throw. Only `WebhookDeliveredListener` catches "unknown invoice" and "not in `sending`", logs a warning with the id and the reason, and returns. Why: the webhook belongs to the provider and must not fail because of the invoice's state, while the services stay reusable. Instead of: services that swallow errors, or a webhook that answers 4xx. ([#14])
 5. **Notify inside the transaction, then commit.** Claim `draft → sending`, call `NotificationFacadeInterface::notify()`, commit. A throwing notification rolls the claim back. Why: a committed `sending` then means the notification went out, which is the README's "change the status after sending". Instead of: committing the claim first and compensating with `sending → draft`, or an outbox (queued notifications are out of scope). ([#12])
 6. **A failed notification answers 503.** `NotificationFailed` wraps any throwable from the facade, `\Error` included. The body says the invoice remains in draft and the send can be retried; the driver's own message never reaches the client. Why: 503 tells the client to retry. Instead of: Laravel's 500. ([#12], [#16])
-7. **Transactions begin `IMMEDIATE` with a 5 s busy timeout.** The write lock is taken at `BEGIN`, so a concurrent send waits, then reads `sending` and gets a clean 409. `SQLiteConnection` rolls back a transaction whose `COMMIT` failed (SQLite keeps it open), which releases the lock. Why: under SQLite's default `DEFERRED` mode, a transaction that read before it wrote failed at once with "database is locked", because SQLite does not wait to upgrade a read lock. Instead of: `DEFERRED` transactions. ([#13])
-8. **A failure after the notification is its own 500.** Once `notify()` has returned, only the commit is left. If the commit fails, `SendNotRecorded` answers a reported 500 that says the customer was notified, the invoice remains in draft and sending it again notifies them again. Why: the retryable 503 must only ever mean that nothing happened. Instead of: a warning in the documentation next to a 503. ([#16])
-9. **A database lock answers 503 on every `/api` route.** `DatabaseLockedRenderer` recognises SQLite's result codes 5 and 6 (busy, locked), never the message, because a query error's message contains the client's own input. Why: a request that waits past the timeout fails at `BEGIN`, before it writes anything; a commit that fails on the lock is rolled back (decision 7; for a send, decision 8 applies); and responses are rendered from data already loaded, so nothing is read after a commit. The 503 is therefore safe to retry. Instead of: a reported 500, or a 503 on send only. ([#16])
-10. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15])
+7. **Transactions begin `IMMEDIATE` with a 5 s busy timeout.** The write lock is taken at `BEGIN`, so a concurrent send waits, then reads `sending` and gets a clean 409. Why: under SQLite's default `DEFERRED` mode, a transaction that read before it wrote failed at once with "database is locked", because SQLite does not wait to upgrade a read lock. Instead of: `DEFERRED` transactions. ([#13])
+8. **A lock past the busy timeout answers Laravel's 500.** A request that waits longer than 5 s fails at `BEGIN`, before it writes anything, and the framework's handler answers a reported 500 on any route; a commit that fails on the lock answers the same 500 (for a send, see [What the send ordering costs](#what-the-send-ordering-costs)). It is Laravel's default, so it has no test of its own. Why: SQLite keeps a transaction whose commit failed open until the request's connection closes (one connection per request under `php artisan serve` and php-fpm), which rolls it back and releases the lock, and the README's failure criterion is the send and delivery workflow, which decisions 5 and 6 answer. Instead of: a 503 for SQLite's busy codes, a connection that rolls back a failed commit at once and a dedicated 500 for a send that notified but did not commit (built in [#13] and [#16]). ([#28])
+9. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15])
 
 ## Testing strategy
 
-Each decision is tested in full at the layer that makes it, and each layer above keeps at most one case of it, which proves that the layer calls the rule and maps its result; the end-to-end lifecycle stories come on top and do not count as a layer. The tests run on a real SQLite engine (in memory, or a temporary file where locks matter), and apart from the notification facade little is replaced.
+Each decision is tested in full at the layer that makes it, and each layer above keeps at most one case of it, which proves that the layer calls the rule and maps its result; the end-to-end lifecycle stories come on top and do not count as a layer. Decision 8 is the exception: Laravel's default 500 has no test of its own. The tests run on a real SQLite engine (in memory, or a temporary file where locks matter), and apart from the notification facade little is replaced.
 
 - **Models** (`tests/Unit/Invoice/Models`): every rule and transition: draft-only creation, the line amounts at their bounds, totals and their overflow, the send rule's order of checks, and each transition from every status. The atomic claim stands in for a concurrency test: two instances of the same invoice claim it, the stale second one's conditional update hits zero rows and throws, and the row moves once.
-- **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification (an `\Error` included), a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
+- **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification (an `\Error` included), and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
 - **HTTP** (`tests/Feature/Invoice/Http`, `DeliveryWebhookTest`): status codes and response bodies, validation (each 422 leaves nothing stored), exact error bodies, and the real webhook route with real event dispatch and no `Event::fake`, so a missing listener registration fails.
 - **Lifecycle** (`InvoiceLifecycleTest`): three end-to-end stories through the real routes, with only the facade faked (the log is a spy and reported exceptions are captured, so the tests can assert on them): the happy path delivered with the reference taken from the recorded notification, a delivery before the send, and a retry after a failed notification. Each step is read back through show.
-- **Real locks** (`SqliteTransactionsTest`, `DatabaseLockedTest`): separate connections on a temporary file prove that `IMMEDIATE` waits at `BEGIN` and that a failed commit is rolled back and releases the lock. Over HTTP they produce the busy 503 with nothing written, and the not-recorded 500 behind a reader.
+- **Real locks** (`SqliteTransactionsTest`): two connections on a temporary file prove that a transaction waits at `BEGIN` while another connection writes and fails there, before its callback runs, once the busy timeout runs out; the default connection's timeout is 5 s.
 - **API document:** `OpenApiDocumentTest` fails when `api.json` differs from what Scramble generates from the code, or when Scramble meets a type it cannot document.
 - **Architecture:** phpat rules, static and run by PHPStan: classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP, and the checked part of the layer and module map above.
 
 ## Failure behaviour
 
-The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)).
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except decision 8's 500, Laravel's default, marked –.
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -89,14 +88,14 @@ The Test column names the tests that check the response. Where a row lists sever
 | Invoice in `sending` or `sent-to-client`, such as a second send | 409, nothing notified again | unchanged | [`SendInvoiceTest`] |
 | No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
 | The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
-| The commit fails after the notification | 500, reported; sending again notifies again | `draft` | [`DatabaseLockedTest`] |
+| The commit fails after the notification | 500, reported; sending again notifies again | `draft` | – |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
-| The database stays locked past the 5 s busy timeout (except a send's commit after the notification: the 500 above) | 503, nothing written, retryable | unchanged | [`DatabaseLockedTest`] (create, send), [`DatabaseLockedRendererTest`] (any `/api` path) |
+| The database stays locked past the 5 s busy timeout (except a send's commit after the notification: the 500 above) | 500, reported, nothing written | unchanged | – |
 
 Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the `Accept` header.
 
@@ -105,9 +104,9 @@ Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the 
 Decision 5 was confirmed knowing these consequences:
 
 - SQLite's database-wide write lock is held from `BEGIN` until the commit, so other writers wait while `notify()` runs. The provided `DummyDriver` returns at once.
-- A concurrent second send waits, then gets 409. If the wait runs out it fails at `BEGIN` with the busy 503. Either way it never notifies.
-- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If the send rolls back instead, the report finds `draft` and is ignored with a warning (204). If it waits past the timeout, the webhook answers 503 and the provider can retry.
-- A commit that fails after the notification leaves the invoice in draft and answers the not-recorded 500 (decision 8). `SQLiteConnection` rolls such a commit back at once, so the lock is released.
+- A concurrent second send waits, then gets 409, or fails at `BEGIN` once the wait runs out. Either way it never notifies.
+- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If the send rolls back instead, the report finds `draft` and is ignored with a warning (204).
+- A commit that fails after the notification answers a 500, and the invoice is draft again once the request's connection closes (decision 8), so sending it again notifies the customer again.
 - A failed notification does not tell whether the email arrived. A provider that delivers and then throws gets its send rolled back, and a retry sends a duplicate. `NotifyData` carries the invoice uuid as its reference, which a real provider can deduplicate on.
 
 ## Known limitations
@@ -132,7 +131,7 @@ Set up with `./start.sh` as the README says. The commands run through Laravel Sa
 | `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. There is no baseline; the one ignore in `phpstan.neon` is structural and commented |
 | `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
 
-**API document.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Three dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer: the mapped exceptions' responses and `total_price` as an integer ([#15]), and the busy 503 on every operation ([#16]). `APP_NAME`, `APP_URL` and `API_VERSION` reach the document, so `phpunit.xml` and `api:export` pin them. `phpunit.xml` also pins `APP_DEBUG=false`, so the tests see production's error bodies.
+**API document.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Two dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer: the mapped exceptions' responses and `total_price` as an integer ([#15]). `APP_NAME`, `APP_URL` and `API_VERSION` reach the document, so `phpunit.xml` and `api:export` pin them. `phpunit.xml` also pins `APP_DEBUG=false`, so the tests see production's error bodies.
 
 ## Try it
 
@@ -187,10 +186,9 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [#14]: https://github.com/xc26gsnck4-creator/interview_3/pull/14
 [#15]: https://github.com/xc26gsnck4-creator/interview_3/pull/15
 [#16]: https://github.com/xc26gsnck4-creator/interview_3/pull/16
+[#28]: https://github.com/xc26gsnck4-creator/interview_3/pull/28
 [`CreateInvoiceTest`]: tests/Feature/Invoice/Http/CreateInvoiceTest.php
 [`ShowInvoiceTest`]: tests/Feature/Invoice/Http/ShowInvoiceTest.php
 [`SendInvoiceTest`]: tests/Feature/Invoice/Http/SendInvoiceTest.php
-[`DatabaseLockedTest`]: tests/Feature/Invoice/Http/DatabaseLockedTest.php
 [`DeliveryWebhookTest`]: tests/Feature/Invoice/DeliveryWebhookTest.php
 [`InvoiceLifecycleTest`]: tests/Feature/Invoice/InvoiceLifecycleTest.php
-[`DatabaseLockedRendererTest`]: tests/Unit/Exceptions/DatabaseLockedRendererTest.php

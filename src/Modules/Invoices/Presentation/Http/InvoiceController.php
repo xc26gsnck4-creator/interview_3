@@ -7,7 +7,6 @@ namespace Modules\Invoices\Presentation\Http;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
-use Modules\Invoices\Application\Exceptions\SendNotRecorded;
 use Modules\Invoices\Application\Services\CreateInvoiceService;
 use Modules\Invoices\Application\Services\FindInvoiceService;
 use Modules\Invoices\Application\Services\SendInvoiceService;
@@ -66,7 +65,6 @@ final readonly class InvoiceController
      * @throws InvalidInvoiceStatusTransition
      * @throws InvoiceNotSendable
      * @throws NotificationFailed
-     * @throws SendNotRecorded
      */
     public function send(string $invoice): InvoiceResource
     {

@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Tests\Support\OpenApi\DatabaseLockedResponseExtension;
 use Tests\Support\OpenApi\InvoiceExceptionsToResponseExtension;
 use Tests\Support\OpenApi\InvoiceTotalPriceReturnTypeExtension;
 
@@ -13,7 +12,6 @@ use Tests\Support\OpenApi\InvoiceTotalPriceReturnTypeExtension;
  */
 return [
     'extensions' => [
-        DatabaseLockedResponseExtension::class,
         InvoiceExceptionsToResponseExtension::class,
         InvoiceTotalPriceReturnTypeExtension::class,
     ],

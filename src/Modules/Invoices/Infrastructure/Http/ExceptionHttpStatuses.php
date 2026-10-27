@@ -7,7 +7,6 @@ namespace Modules\Invoices\Infrastructure\Http;
 use Exception;
 use Illuminate\Http\Response;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
-use Modules\Invoices\Application\Exceptions\SendNotRecorded;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
@@ -33,7 +32,6 @@ final class ExceptionHttpStatuses
      */
     public const array SERVER_ERRORS = [
         NotificationFailed::class => Response::HTTP_SERVICE_UNAVAILABLE,
-        SendNotRecorded::class => Response::HTTP_INTERNAL_SERVER_ERROR,
     ];
 
     /**
