@@ -67,7 +67,7 @@ final class InvoiceProductLineTest extends TestCase
      */
     public function test_updates_a_valid_amount(): void
     {
-        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
+        $line = InvoiceProductLine::query()->findOrFail(InvoiceProductLine::factory()->create(['quantity' => 2])->id);
 
         $line->update(['quantity' => 3]);
 
