@@ -75,8 +75,8 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
 | **Create** `POST /api/invoices` | | | |
-| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` a non-blank string, a number or an object not keyed `"0"`, `"1"`, …, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
-| No `product_lines`, `null`, `[]` or a blank string (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
+| `customer_name` or `customer_email` missing or invalid; a line whose name is missing, blank or over 255 characters, or whose quantity or unit price is outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` a non-blank string, an object not keyed `"0"`, `"1"`, …, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
+| No `product_lines`, `null` or `[]` (allowed by the task), or a blank string (see [Known limitations](#known-limitations)) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
 | A form body, a body not marked as JSON, malformed JSON | 422 | nothing stored | [`CreateInvoiceTest`] |
 | Lines whose total overflows PHP's int | 422 on `product_lines` | nothing stored | [`CreateInvoiceTest`] |
 | **Show** `GET /api/invoices/{id}` | | | |

@@ -18,9 +18,10 @@ final class CreateInvoiceRequest extends FormRequest
     }
 
     /**
-     * The API takes JSON only: the query string and a form body are never read,
-     * so bytes that are not UTF-8 cannot reach the database, and a malformed
-     * body validates as empty.
+     * The API takes JSON only: the query string and any body not marked as JSON
+     * are never read, so bytes that are not UTF-8 cannot reach the database, and
+     * a malformed body validates as empty. Laravel trims the strings of this
+     * bag, and turns empty ones into null, only for a request marked as JSON.
      *
      * @return array<string, mixed>
      */
@@ -35,8 +36,9 @@ final class CreateInvoiceRequest extends FormRequest
      * within the line invariant's range, so input the domain would reject is a
      * 422 rather than a 500. A blank name is null after Laravel's trimming
      * middleware, so `required` rejects it. `list` implies `array`, which is
-     * there for the API document's `maxItems`. The line cap bounds the inserts
-     * made while SQLite's write lock is held.
+     * there for the API document: Scramble writes the array type and `maxItems`
+     * only for it. The line cap bounds the inserts made while SQLite's write
+     * lock is held.
      *
      * @return array<string, list<string>>
      */
