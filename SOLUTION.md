@@ -21,8 +21,8 @@ src/Modules/Invoices/
 │                    NotificationFailed and SendNotRecorded
 ├── Infrastructure/  service provider, the webhook listener, the exception
 │                    to HTTP status map
-└── Presentation/    controller (one service call per action), form request
-                     and its length rule, JSON resources, routes
+└── Presentation/    controller (one service call per action), form request,
+                     JSON resources, routes
 ```
 
 Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guards (strict Eloquent outside production, no destructive database commands in production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
@@ -75,12 +75,10 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
 | **Create** `POST /api/invoices` | | | |
-| `customer_name` or `customer_email` missing or invalid; a line without a name, or with a quantity or unit price outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` not a list | 422 | nothing stored | [`CreateInvoiceTest`] |
-| No `product_lines`, or `[]` (allowed by the task) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
+| `customer_name` or `customer_email` missing or invalid; a line whose name is missing, blank or over 255 characters, or whose quantity or unit price is outside 1 to 2,147,483,647 or not a JSON integer; `product_lines` a non-blank string, an object not keyed `"0"`, `"1"`, …, or more than 1000 lines | 422 | nothing stored | [`CreateInvoiceTest`] |
+| No `product_lines`, `null` or `[]` (allowed by the task), or a blank string (see [Known limitations](#known-limitations)) | 201 | `draft` without lines; a send answers 422 | [`CreateInvoiceTest`] |
 | A form body, a body not marked as JSON, malformed JSON | 422 | nothing stored | [`CreateInvoiceTest`] |
-| More than 1000 lines | 422, one error, lines not validated | nothing stored | [`CreateInvoiceTest`] |
 | Lines whose total overflows PHP's int | 422 on `product_lines` | nothing stored | [`CreateInvoiceTest`] |
-| A customer name, email or line name over 255 characters as sent, even if trimming would shorten it | 422 | nothing stored | [`CreateInvoiceTest`] |
 | **Show** `GET /api/invoices/{id}` | | | |
 | Unknown id | 404 | – | [`ShowInvoiceTest`] |
 | Not a uuid | 404, JSON whatever the `Accept` header | – | [`ShowInvoiceTest`] |
@@ -120,6 +118,7 @@ Decision 5 was confirmed knowing these consequences:
 - Totals are integers in minor units up to 2^63−1, so a client must parse integers above 2^53 exactly. JavaScript's `JSON.parse` rounds them; use a BigInt-aware parser.
 - Quiet saves (`saveQuietly()`, `createQuietly()`) and query-builder writes bypass the model rules, and the schema is fixed by the task, so there is no CHECK constraint behind them. The send rule re-checks the stored line amounts, so an invalid line written that way cannot be sent.
 - Product lines stay editable through the model after the invoice leaves draft. No endpoint edits them, but nothing freezes them either.
+- Laravel decodes JSON objects into PHP arrays, trims strings and turns empty ones into `null` before the create rules run. For `product_lines`, `{}` reads as `[]`, an object keyed `"0"`, `"1"`, … as a list and a blank string as `null`. The rules check the trimmed text, while `api.json` describes the text as sent: a 255-character name after a tab breaks the document's `maxLength: 255` but is accepted and stored trimmed, and a blank name fits the document (no `minLength`) but answers 422.
 
 ## Running the checks
 

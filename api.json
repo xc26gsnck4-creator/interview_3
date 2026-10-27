@@ -342,7 +342,6 @@
                 "properties": {
                     "customer_name": {
                         "type": "string",
-                        "minLength": 1,
                         "maxLength": 255
                     },
                     "customer_email": {
@@ -351,13 +350,15 @@
                         "maxLength": 255
                     },
                     "product_lines": {
-                        "type": "array",
+                        "type": [
+                            "array",
+                            "null"
+                        ],
                         "items": {
                             "type": "object",
                             "properties": {
                                 "name": {
                                     "type": "string",
-                                    "minLength": 1,
                                     "maxLength": 255
                                 },
                                 "quantity": {
