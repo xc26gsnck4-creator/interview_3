@@ -4,18 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Invoice\Models;
 
-use Closure;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Iterator;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class InvoiceTest extends TestCase
@@ -123,19 +120,7 @@ final class InvoiceTest extends TestCase
         $this->assertDatabaseCount('invoices', 0);
     }
 
-    /**
-     * @return Iterator<string, array{Closure(Invoice): mixed}>
-     */
-    public static function totalComputations(): Iterator
-    {
-        yield 'totalPrice' => [static fn (Invoice $invoice): int => $invoice->totalPrice()];
-        yield 'totalPriceOfLoadedLines' => [static fn (Invoice $invoice): int => $invoice->totalPriceOfLoadedLines()];
-        yield 'ensureTotalFits' => [static function (Invoice $invoice): void {
-            $invoice->ensureTotalFits();
-        }];
-    }
-
-    public function test_total_price_of_loaded_lines_sums_the_loaded_relation(): void
+    public function test_total_price_sums_the_loaded_lines(): void
     {
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->for($invoice)->forEachSequence(
@@ -145,15 +130,10 @@ final class InvoiceTest extends TestCase
         $invoice->load('productLines');
         InvoiceProductLine::factory()->for($invoice)->create(['quantity' => 1, 'unit_price' => 700]);
 
-        self::assertSame(3500, $invoice->totalPriceOfLoadedLines());
-        self::assertSame(4200, $invoice->totalPrice());
+        self::assertSame(3500, $invoice->totalPrice());
     }
 
-    /**
-     * @param  Closure(Invoice): mixed  $computeTotal
-     */
-    #[DataProvider('totalComputations')]
-    public function test_total_computation_throws_when_the_sum_overflows(Closure $computeTotal): void
+    public function test_total_price_throws_when_the_sum_overflows(): void
     {
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->count(3)->for($invoice)->create([
@@ -162,7 +142,7 @@ final class InvoiceTest extends TestCase
         ]);
 
         $this->assertThrows(
-            fn (): mixed => $computeTotal($invoice),
+            fn (): int => $invoice->totalPrice(),
             InvoiceTotalOverflow::class,
             sprintf('The total of invoice %s exceeds the maximum representable integer.', $invoice->id),
         );
@@ -183,16 +163,6 @@ final class InvoiceTest extends TestCase
         )->create();
 
         self::assertSame(PHP_INT_MAX, $invoice->totalPrice());
-    }
-
-    public function test_total_price_includes_lines_added_after_the_relation_was_loaded(): void
-    {
-        $invoice = Invoice::factory()->create();
-        self::assertCount(0, $invoice->productLines);
-
-        $invoice->productLines()->create(['name' => 'x', 'quantity' => 2, 'unit_price' => 100]);
-
-        self::assertSame(200, $invoice->totalPrice());
     }
 
     public function test_find_or_throw_returns_the_invoice(): void

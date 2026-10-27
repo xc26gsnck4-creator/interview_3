@@ -11,8 +11,11 @@ use Modules\Invoices\Domain\Models\Invoice;
 
 /**
  * Customer name and email arrive validated from the HTTP edge; the domain
- * owns the status and the line rules. A rejected line, or lines whose total
- * does not fit in int, roll back the whole invoice.
+ * owns the status and the line rules. A rejected line rolls back the whole
+ * invoice, and so do lines whose total does not fit in int: totalPrice() is
+ * called for that check alone. The lines createMany() returns become the
+ * loaded relation without another query; they are in creation order, the
+ * order productLines() defines.
  */
 final readonly class CreateInvoiceService
 {
@@ -28,7 +31,7 @@ final readonly class CreateInvoiceService
                 'customer_email' => $data->customerEmail,
             ]);
 
-            $invoice->productLines()->createMany(array_map(
+            $lines = $invoice->productLines()->createMany(array_map(
                 static fn (ProductLineData $line): array => [
                     'name' => $line->name,
                     'quantity' => $line->quantity,
@@ -36,9 +39,10 @@ final readonly class CreateInvoiceService
                 ],
                 $data->productLines,
             ));
-            $invoice->ensureTotalFits();
+            $invoice->setRelation('productLines', $lines);
+            $invoice->totalPrice();
 
-            return $invoice->load('productLines');
+            return $invoice;
         });
     }
 }
