@@ -20,6 +20,11 @@ use Modules\Notifications\Api\Events\WebhookDeliveredEvent;
  */
 final class InvoiceServiceProvider extends ServiceProvider
 {
+    /**
+     * Only the framework's own handler gets the mappings: in console runs with
+     * the dev dependencies Collision wraps it, and those runs render no HTTP
+     * responses.
+     */
     public function boot(): void
     {
         Event::listen(WebhookDeliveredEvent::class, WebhookDeliveredListener::class);
@@ -32,12 +37,8 @@ final class InvoiceServiceProvider extends ServiceProvider
     }
 
     /**
-     * Domain exceptions know nothing about HTTP, and bootstrap/app.php knows
-     * nothing about invoices, so the module maps them here. Only the
-     * framework's own handler gets the mappings: in console runs with the dev
-     * dependencies, Collision wraps it in a console handler, and console runs
-     * render no HTTP responses anyway. Client errors (4xx) are not reported;
-     * server errors (503, 500) are.
+     * Domain exceptions know nothing about HTTP and bootstrap/app.php knows
+     * nothing about invoices, so the module maps them here.
      */
     private static function renderDomainExceptions(Handler $handler): void
     {

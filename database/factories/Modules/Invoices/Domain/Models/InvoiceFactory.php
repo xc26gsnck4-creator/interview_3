@@ -14,7 +14,7 @@ use Modules\Invoices\Domain\Models\Invoice;
  * it without the model referencing the factory.
  *
  * inStatus(), sending() and sentToClient() are create()-only states: make() yields a draft,
- * because the model's creating invariant forbids constructing a non-draft invoice,
+ * because the model's creating hook rejects a new invoice in any other status,
  * so the states apply their status in afterCreating.
  *
  * @extends Factory<Invoice>
@@ -44,8 +44,7 @@ final class InvoiceFactory extends Factory
     }
 
     /**
-     * Test-only shortcut past the transitions: invoices are created as draft and
-     * then saved with the requested status. Draft leaves the invoice as created.
+     * A test-only shortcut past the transitions.
      */
     public function inStatus(StatusEnum $status): self
     {
