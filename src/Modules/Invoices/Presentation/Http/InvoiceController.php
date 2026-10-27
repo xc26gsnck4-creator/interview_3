@@ -19,16 +19,12 @@ use Modules\Invoices\Presentation\Http\Requests\CreateInvoiceRequest;
 use Modules\Invoices\Presentation\Http\Resources\InvoiceResource;
 
 /**
- * Each action calls one application service. Domain exceptions are mapped to
- * HTTP by InvoiceServiceProvider; an action's @throws tags name the mapped
- * ones it answers with, for the API document (store's 422 is the form
- * request's validation error, which store() also raises for an overflowing
- * total). Action PHPDoc summaries are published in the API document, so the
- * reasons live here.
- *
- * store(): lines whose total does not fit in int are a fault in the submitted
- * lines, so they answer the same validation error as any other bad line; the
- * invoice was rolled back, so the message names no id.
+ * Domain exceptions are mapped to HTTP by InvoiceServiceProvider, and each
+ * action's @throws tags name the mapped ones it answers with, for the API
+ * document. Action PHPDoc summaries are published there, so the reasons live
+ * here. store() answers an overflowing total as a validation error, since it
+ * is a fault in the submitted lines, and names no id because the invoice was
+ * rolled back.
  */
 final readonly class InvoiceController
 {

@@ -16,7 +16,6 @@ use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
  * The status each mapped exception answers with, as `{"message": ...}`.
  * InvoiceServiceProvider renders from these maps and the API document is
  * generated from them, so the responses and their documentation cannot drift.
- * Client errors are not reported; server errors are.
  */
 final class ExceptionHttpStatuses
 {
