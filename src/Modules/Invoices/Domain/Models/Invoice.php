@@ -93,7 +93,7 @@ final class Invoice extends Model
 
     /**
      * The send rule, also usable as a dry check. The status is checked first.
-     * The lines are loaded fresh, and the send reuses them for the total.
+     * The lines are read fresh into the loaded relation.
      * The stored line amounts are checked again although model writes already
      * guarantee them, so the rule also catches a row written past the model
      * events whose amount reads as an integer out of range.
