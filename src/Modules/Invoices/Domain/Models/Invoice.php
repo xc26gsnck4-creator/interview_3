@@ -21,7 +21,8 @@ use Override;
 /**
  * Status is not fillable: a new invoice takes the draft default, which the
  * creating hook enforces, and the application changes it only through the two
- * transitions.
+ * transitions. Nothing on the model stops a direct assignment and save() after
+ * creation.
  *
  * @property string $id
  * @property string $customer_name
@@ -84,7 +85,7 @@ final class Invoice extends Model
 
     /**
      * The stored amounts are checked again, so a line written past the model
-     * events with an amount out of range cannot be sent.
+     * events whose amount reads as an integer out of range cannot be sent.
      */
     public function ensureCanBeSent(): void
     {
