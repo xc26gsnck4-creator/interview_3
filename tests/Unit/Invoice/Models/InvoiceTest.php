@@ -13,6 +13,7 @@ use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 use Tests\TestCase;
 
 final class InvoiceTest extends TestCase
@@ -112,8 +113,8 @@ final class InvoiceTest extends TestCase
     {
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->count(3)->for($invoice)->create([
-            'quantity' => InvoiceProductLine::MAX_VALUE,
-            'unit_price' => InvoiceProductLine::MAX_VALUE,
+            'quantity' => Amount::MAX,
+            'unit_price' => Amount::MAX,
         ]);
 
         $this->assertThrows(
@@ -129,7 +130,7 @@ final class InvoiceTest extends TestCase
      */
     public function test_total_price_accepts_a_sum_of_exactly_php_int_max(): void
     {
-        $max = InvoiceProductLine::MAX_VALUE;
+        $max = Amount::MAX;
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->for($invoice)->forEachSequence(
             ['quantity' => $max, 'unit_price' => $max],

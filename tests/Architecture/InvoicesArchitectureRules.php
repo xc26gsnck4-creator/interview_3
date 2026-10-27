@@ -137,9 +137,10 @@ final class InvoicesArchitectureRules
             ->canOnly()->dependOn()->classes(
                 Selector::inNamespace('Modules\Invoices\Domain'),
                 Selector::inNamespace('Illuminate\Database\Eloquent'),
+                Selector::inNamespace('Illuminate\Contracts\Database\Eloquent'),
                 Selector::inNamespace('Database\Factories'),
                 Selector::isStandardClass(),
             )
-            ->because('Eloquent models are the domain; the rest of Illuminate belongs to outer layers');
+            ->because('Eloquent models and casts are the domain; the rest of Illuminate belongs to outer layers');
     }
 }

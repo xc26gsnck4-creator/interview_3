@@ -63,8 +63,8 @@ final class Invoice extends Model
     }
 
     /**
-     * A line total always fits in int (InvoiceProductLine::MAX_VALUE caps both
-     * factors), but the sum may not, so only the addition is checked.
+     * A line total always fits in int (Amount::MAX caps both factors), but the
+     * sum may not, so only the addition is checked.
      */
     public function totalPrice(): int
     {
@@ -85,8 +85,8 @@ final class Invoice extends Model
 
     /**
      * The stored amounts are checked again, as given, so a line written past
-     * the model events with an amount that is not an integer in range cannot
-     * be sent.
+     * the cast, with the query builder, with an amount that is not an integer in
+     * range cannot be sent.
      */
     public function ensureCanBeSent(): void
     {

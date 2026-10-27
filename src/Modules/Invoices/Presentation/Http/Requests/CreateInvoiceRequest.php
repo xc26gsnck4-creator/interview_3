@@ -7,7 +7,7 @@ namespace Modules\Invoices\Presentation\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Modules\Invoices\Application\Data\CreateInvoiceData;
 use Modules\Invoices\Application\Data\ProductLineData;
-use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 use Override;
 
 final class CreateInvoiceRequest extends FormRequest
@@ -37,7 +37,7 @@ final class CreateInvoiceRequest extends FormRequest
      */
     public function rules(): array
     {
-        $amount = ['required', 'integer:strict', 'min:1', 'max:'.InvoiceProductLine::MAX_VALUE];
+        $amount = ['required', 'integer:strict', 'min:1', 'max:'.Amount::MAX];
 
         return [
             'customer_name' => ['required', 'string', 'max:255'],

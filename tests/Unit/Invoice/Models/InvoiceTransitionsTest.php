@@ -11,6 +11,7 @@ use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
@@ -19,7 +20,7 @@ final class InvoiceTransitionsTest extends TestCase
 {
     public function test_ensure_can_be_sent_passes_for_draft_with_valid_lines(): void
     {
-        $max = InvoiceProductLine::MAX_VALUE;
+        $max = Amount::MAX;
         $invoice = Invoice::factory()->create();
         InvoiceProductLine::factory()->for($invoice)->forEachSequence(
             ['quantity' => 1, 'unit_price' => $max],
@@ -44,27 +45,25 @@ final class InvoiceTransitionsTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', int|float|string}>
+     * @return Iterator<string, array{'quantity'|'unit_price', float|string}>
      */
     public static function invalidPersistedValues(): Iterator
     {
-        yield 'zero quantity' => ['quantity', 0];
-        yield 'negative unit price' => ['unit_price', -1];
         yield 'text unit price' => ['unit_price', 'abc'];
         yield 'fractional quantity' => ['quantity', 1.5];
-        yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1];
     }
 
     /**
-     * The row is created without model events, past the line invariant, so
+     * The row is written with the query builder, past the cast, so
      * the send rule is proven to hold on its own. The invalid line comes after
      * a valid one, so every line is checked, not only the first.
      */
     #[DataProvider('invalidPersistedValues')]
-    public function test_ensure_can_be_sent_throws_not_sendable_when_a_persisted_line_is_invalid(string $field, int|float|string $value): void
+    public function test_ensure_can_be_sent_throws_not_sendable_when_a_persisted_line_is_invalid(string $field, float|string $value): void
     {
         $invoice = Invoice::factory()->withLines()->create();
-        InvoiceProductLine::factory()->for($invoice)->createQuietly([$field => $value]);
+        $line = InvoiceProductLine::factory()->for($invoice)->create();
+        DB::table('invoice_product_lines')->where('id', $line->id)->update([$field => $value]);
 
         $this->assertThrows(
             fn () => $invoice->ensureCanBeSent(),

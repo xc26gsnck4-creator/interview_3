@@ -11,7 +11,7 @@ use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidProductLine;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Modules\Invoices\Domain\Models\Invoice;
-use Modules\Invoices\Domain\Models\InvoiceProductLine;
+use Modules\Invoices\Domain\ValueObjects\Amount;
 use Tests\TestCase;
 
 final class CreateInvoiceServiceTest extends TestCase
@@ -89,7 +89,7 @@ final class CreateInvoiceServiceTest extends TestCase
 
     public function test_persists_nothing_when_the_total_overflows(): void
     {
-        $line = new ProductLineData(name: 'Bulk', quantity: InvoiceProductLine::MAX_VALUE, unitPrice: InvoiceProductLine::MAX_VALUE);
+        $line = new ProductLineData(name: 'Bulk', quantity: Amount::MAX, unitPrice: Amount::MAX);
         $data = new CreateInvoiceData(customerName: 'Acme', customerEmail: 'billing@acme.test', productLines: [$line, $line, $line]);
 
         $this->assertThrows(
