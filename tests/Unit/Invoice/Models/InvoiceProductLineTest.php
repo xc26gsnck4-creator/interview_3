@@ -32,57 +32,29 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', int}>
+     * @return Iterator<string, array{'quantity'|'unit_price', ?int, string}>
      */
-    public static function nonPositiveValues(): Iterator
+    public static function outOfRangeValues(): Iterator
     {
-        yield 'quantity zero' => ['quantity', 0];
-        yield 'quantity negative' => ['quantity', -1];
-        yield 'unit price zero' => ['unit_price', 0];
-        yield 'unit price negative' => ['unit_price', -1];
+        yield 'quantity zero' => ['quantity', 0, '0'];
+        yield 'quantity negative' => ['quantity', -1, '-1'];
+        yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'unit price zero' => ['unit_price', 0, '0'];
+        yield 'unit price negative' => ['unit_price', -1, '-1'];
+        yield 'unit price above MAX_VALUE' => ['unit_price', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'unit price null' => ['unit_price', null, 'NULL'];
     }
 
     /**
      * @param  'quantity'|'unit_price'  $field
      */
-    #[DataProvider('nonPositiveValues')]
-    public function test_rejects_non_positive_values(string $field, int $value): void
+    #[DataProvider('outOfRangeValues')]
+    public function test_rejects_amounts_out_of_range(string $field, ?int $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
             InvalidProductLine::class,
-        );
-        $this->assertDatabaseCount('invoice_product_lines', 0);
-    }
-
-    public function test_rejects_a_null_amount(): void
-    {
-        $this->assertThrows(
-            fn () => InvoiceProductLine::factory()->create(['unit_price' => null]),
-            InvalidProductLine::class,
-            'Product line unit_price must be an integer between 1 and 2147483647, NULL given.',
-        );
-        $this->assertDatabaseCount('invoice_product_lines', 0);
-    }
-
-    /**
-     * @return Iterator<string, array{'quantity'|'unit_price'}>
-     */
-    public static function bothFields(): Iterator
-    {
-        yield 'quantity' => ['quantity'];
-        yield 'unit price' => ['unit_price'];
-    }
-
-    /**
-     * @param  'quantity'|'unit_price'  $field
-     */
-    #[DataProvider('bothFields')]
-    public function test_rejects_values_above_max_value(string $field): void
-    {
-        $this->assertThrows(
-            fn () => InvoiceProductLine::factory()->create([$field => InvoiceProductLine::MAX_VALUE + 1]),
-            InvalidProductLine::class,
+            sprintf('Product line %s must be an integer between 1 and 2147483647, %s given.', $field, $renderedValue),
         );
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
