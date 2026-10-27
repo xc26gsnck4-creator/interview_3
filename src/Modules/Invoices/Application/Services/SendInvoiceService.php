@@ -15,9 +15,9 @@ use Throwable;
 /**
  * The claim and the notification share one transaction, so any throwable from
  * notify() rolls the claim back and the invoice stays draft. A commit that
- * fails after notify() has returned leaves the invoice draft as well, with the
- * customer already notified; callers must not wrap handle() in a transaction
- * of their own, which would move that commit later.
+ * fails after notify() has returned leaves it draft too once the request's
+ * connection closes, with the customer already notified; callers must not wrap
+ * handle() in a transaction of their own, which would move that commit later.
  */
 final readonly class SendInvoiceService
 {
