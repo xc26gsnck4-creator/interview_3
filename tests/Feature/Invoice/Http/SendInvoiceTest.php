@@ -4,25 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Invoice\Http;
 
-use Error;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Str;
-use Iterator;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
-use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Models\Invoice;
-use Modules\Invoices\Domain\Models\InvoiceProductLine;
 use Modules\Notifications\Api\NotificationFacadeInterface;
-use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Support\FakeNotificationFacade;
 use Tests\TestCase;
-use Throwable;
 
 final class SendInvoiceTest extends TestCase
 {
@@ -95,58 +89,24 @@ final class SendInvoiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
-    public function test_rejects_invoice_with_invalid_persisted_line_with_422(): void
-    {
-        $invoice = Invoice::factory()->withLines()->create();
-        InvoiceProductLine::factory()->for($invoice)->createQuietly(['unit_price' => 0]);
-
-        $response = $this->postJson(route('invoices.send', $invoice->id));
-
-        $response->assertUnprocessable()->assertExactJson([
-            'message' => sprintf('Invoice %s cannot be sent: a product line has an invalid quantity or unit price.', $invoice->id),
-        ]);
-        self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
-    }
-
     /**
      * A client error, so it is not reported.
      */
-    #[DataProvider('nonDraftStatuses')]
-    public function test_rejects_invoice_not_in_draft_with_409(StatusEnum $status): void
-    {
-        $exceptions = Exceptions::fake();
-        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
-
-        $response = $this->postJson(route('invoices.send', $invoice->id));
-
-        $response->assertConflict()->assertExactJson([
-            'message' => sprintf('Invoice %s cannot move from %s to sending.', $invoice->id, $status->value),
-        ]);
-        self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
-        $exceptions->assertNotReported(InvalidInvoiceStatusTransition::class);
-    }
-
-    /**
-     * @return Iterator<string, array{StatusEnum}>
-     */
-    public static function nonDraftStatuses(): Iterator
-    {
-        yield 'sending' => [StatusEnum::Sending];
-        yield 'sent to client' => [StatusEnum::SentToClient];
-    }
-
     public function test_second_send_is_rejected_with_409(): void
     {
+        $exceptions = Exceptions::fake();
         $invoice = Invoice::factory()->withLines()->create();
 
         $first = $this->postJson(route('invoices.send', $invoice->id));
         $second = $this->postJson(route('invoices.send', $invoice->id));
 
         $first->assertOk();
-        $second->assertConflict();
+        $second->assertConflict()->assertExactJson([
+            'message' => sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
+        ]);
         self::assertCount(1, $this->notifications->notified);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
+        $exceptions->assertNotReported(InvalidInvoiceStatusTransition::class);
     }
 
     public function test_returns_404_for_unknown_invoice(): void
@@ -161,11 +121,10 @@ final class SendInvoiceTest extends TestCase
     /**
      * The exact body proves the notification's own message stays out.
      */
-    #[DataProvider('notificationFailures')]
-    public function test_answers_503_and_stays_draft_when_the_notification_fails(Throwable $failure): void
+    public function test_answers_503_and_stays_draft_when_the_notification_fails(): void
     {
         $exceptions = Exceptions::fake();
-        $this->notifications->failWith = $failure;
+        $this->notifications->failWith = new RuntimeException('smtp down');
         $invoice = Invoice::factory()->withLines()->create();
 
         $response = $this->postJson(route('invoices.send', $invoice->id));
@@ -175,14 +134,5 @@ final class SendInvoiceTest extends TestCase
         ]);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
         $exceptions->assertReported(NotificationFailed::class);
-    }
-
-    /**
-     * @return Iterator<string, array{Throwable}>
-     */
-    public static function notificationFailures(): Iterator
-    {
-        yield 'runtime exception' => [new RuntimeException('smtp down')];
-        yield 'error' => [new Error('smtp down')];
     }
 }

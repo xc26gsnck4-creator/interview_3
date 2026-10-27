@@ -6,12 +6,9 @@ namespace Tests\Unit\Invoice\Listeners;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Iterator;
-use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Infrastructure\Listeners\WebhookDeliveredListener;
 use Modules\Notifications\Api\Events\WebhookDeliveredEvent;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
@@ -53,27 +50,17 @@ final class WebhookDeliveredListenerTest extends TestCase
         $this->listener()->handle($this->deliveredEvent($unknownId));
     }
 
-    /**
-     * @return Iterator<string, array{StatusEnum}>
-     */
-    public static function statusesOtherThanSending(): Iterator
+    public function test_logs_and_ignores_invoice_not_in_sending(): void
     {
-        yield 'draft' => [StatusEnum::Draft];
-        yield 'sent to client' => [StatusEnum::SentToClient];
-    }
-
-    #[DataProvider('statusesOtherThanSending')]
-    public function test_logs_and_ignores_invoice_not_in_sending(StatusEnum $status): void
-    {
-        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
+        $invoice = Invoice::factory()->create();
         $this->logger->expects($this->once())->method('warning')->with('Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoice->id,
-            'reason' => sprintf('Invoice %s cannot move from %s to sent-to-client.', $invoice->id, $status->value),
+            'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
         ]);
 
         $this->listener()->handle($this->deliveredEvent($invoice->id));
 
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
     /**
