@@ -122,14 +122,15 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The commands run through Laravel Sail; `docker compose exec -u sail app php artisan test` and `docker compose exec -u sail app composer phpstan` do the same (`-u sail` runs them as the app's user, as Sail does, instead of root).
+Set up with `./start.sh` as the README says. The commands run through Laravel Sail; any `composer` script below also runs as `docker compose exec -u sail app composer <script>` (`-u sail` runs it as the app's user, as Sail does, instead of root).
 
 | Command | What it checks | Note |
 |---|---|---|
-| `vendor/bin/sail artisan test` | the test suite | in-memory SQLite; never touches `database/database.sqlite` |
-| `vendor/bin/sail bin pint --test` | code style: the Laravel preset plus `declare(strict_types=1)` in every `.php` file (`pint.json`) | |
+| `vendor/bin/sail composer check` | the next three rows, top to bottom | stops at the first failing gate |
+| `vendor/bin/sail composer lint` | code style: the Laravel preset plus `declare(strict_types=1)` in every `.php` file (`pint.json`) | |
 | `vendor/bin/sail composer phpstan` | PHPStan at level max with Larastan, strict rules, PHPUnit rules and the phpat rules | wipes its tmpDir first: under Docker Desktop its directory cache missed new files and still reported OK. There is no baseline; the one ignore in `phpstan.neon` is structural and commented |
-| `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale |
+| `vendor/bin/sail composer test` | the test suite | in-memory SQLite, a temporary file for the lock tests; never touches `database/database.sqlite` |
+| `vendor/bin/sail composer api:export` | regenerates `api.json` | `OpenApiDocumentTest` fails when it is stale, so `check` leaves it out |
 
 **API document.** `api.json` is the OpenAPI document Scramble generates from the code. It is committed, and the docs UI at `/docs/api` works in the local environment. Two dev-only Scramble extensions in `tests/Support/OpenApi` (registered in `config/scramble.php`) document what Scramble cannot infer: the mapped exceptions' responses and `total_price` as an integer ([#15]). `APP_NAME`, `APP_URL` and `API_VERSION` reach the document, so `phpunit.xml` and `api:export` pin them. `phpunit.xml` also pins `APP_DEBUG=false`, so the tests see production's error bodies.
 
