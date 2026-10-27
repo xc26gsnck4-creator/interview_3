@@ -48,10 +48,6 @@ final class InvoiceProductLine extends Model
         return $this->quantity * $this->unit_price;
     }
 
-    /**
-     * The amounts rule as a check, so the send rule also catches a line written
-     * past the model events.
-     */
     public function hasValidAmounts(): bool
     {
         return self::isValidAmount($this->quantity) && self::isValidAmount($this->unit_price);
@@ -80,8 +76,8 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Null on a new line whose amount is unset or null, because the integer cast
-     * leaves null alone.
+     * Nullable because the integer cast leaves an unset or null amount on a new
+     * line as null.
      */
     private static function isValidAmount(?int $value): bool
     {

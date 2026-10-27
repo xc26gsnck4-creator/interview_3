@@ -19,8 +19,9 @@ use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
 
 /**
- * Status is not fillable, so mass assignment never sets it: the creating hook
- * pins draft and the two transitions change it afterwards.
+ * Status is not fillable: a new invoice takes the draft default, which the
+ * creating hook enforces, and the application changes it only through the two
+ * transitions.
  *
  * @property string $id
  * @property string $customer_name
@@ -42,8 +43,7 @@ final class Invoice extends Model
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
-     * Ids are stored lowercase and SQLite compares them case-sensitively, so a
-     * uuid typed in upper case is lowercased first.
+     * Ids are stored lowercase and SQLite compares them case-sensitively.
      */
     public static function findOrThrow(string $invoiceId): self
     {
@@ -51,8 +51,8 @@ final class Invoice extends Model
     }
 
     /**
-     * Ordered by id, which is creation order: HasUuids generates time-ordered
-     * UUIDv7 ids.
+     * Ordered by id, which is creation order: HasUuids generates UUIDv7 ids,
+     * monotonic within one process.
      *
      * @return HasMany<InvoiceProductLine, $this>
      */

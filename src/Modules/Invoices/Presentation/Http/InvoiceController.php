@@ -22,8 +22,9 @@ use Modules\Invoices\Presentation\Http\Resources\InvoiceResource;
  * Domain exceptions are mapped to HTTP by InvoiceServiceProvider, and each
  * action's @throws tags name the mapped ones it answers with, for the API
  * document. Action PHPDoc summaries are published there, so the reasons live
- * here. store() answers an overflowing total with the validation error any
- * other bad line gets, naming no id because the invoice was rolled back.
+ * here. store() answers an overflowing total as a validation error, since it
+ * is a fault in the submitted lines, and names no id because the invoice was
+ * rolled back.
  */
 final readonly class InvoiceController
 {

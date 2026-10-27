@@ -10,10 +10,9 @@ use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
- * A rejected line or a total that does not fit in int rolls back the whole
- * invoice; totalPrice() is called for that check alone. The lines createMany()
- * returns become the loaded relation without another query, in the creation
- * order productLines() defines.
+ * totalPrice() is called only so that a total that does not fit in int rolls
+ * the invoice back. The lines createMany() returns are already in the order
+ * productLines() defines, so they become the relation without another query.
  */
 final readonly class CreateInvoiceService
 {

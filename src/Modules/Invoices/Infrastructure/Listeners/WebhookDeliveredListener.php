@@ -15,8 +15,8 @@ use Psr\Log\LoggerInterface;
  * Notifications module: a report for an unknown invoice or one not in sending
  * is logged and ignored, so the webhook still answers 204. Anything else, such
  * as a database-locked error, propagates and answers a status the provider can
- * retry. ModelNotFoundException is not caught, because the service holds the
- * write lock from the lookup to the transition.
+ * retry. ModelNotFoundException is not caught: the service holds the write lock
+ * from the lookup to the transition, so the row cannot be deleted in between.
  */
 final readonly class WebhookDeliveredListener
 {

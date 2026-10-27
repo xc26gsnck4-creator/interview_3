@@ -30,8 +30,8 @@ final class CreateInvoiceRequest extends FormRequest
     }
 
     /**
-     * `list` implies `array`, which is there for the API document: Scramble
-     * writes the array type and `maxItems` only for it.
+     * `array` is redundant beside `list` but stays for the API document:
+     * Scramble writes the array type and `maxItems` only for it.
      *
      * @return array<string, list<string>>
      */

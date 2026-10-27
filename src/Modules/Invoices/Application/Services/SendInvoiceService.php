@@ -17,8 +17,9 @@ use Throwable;
  * The claim and the notification share one transaction, so any throwable from
  * notify() rolls the claim back and the invoice stays draft. Once notify() has
  * returned only the commit is left (the application registers no afterCommit
- * callbacks), so a failure then means the customer was notified and becomes
- * SendNotRecorded, while a failure before it passes through unchanged. Callers
+ * callbacks), so a failure from then on, with the customer already notified,
+ * becomes SendNotRecorded, while one before notify() returns passes through
+ * unchanged. Callers
  * must not wrap handle() in a transaction of their own, which would defer that
  * commit.
  */

@@ -8,10 +8,10 @@ use Illuminate\Database\ConnectionInterface;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
- * Strict: the webhook listener decides what to tolerate. The lookup runs in
- * the transaction, which takes SQLite's write lock at BEGIN, so a report that
- * arrives while a send still holds the lock waits for its commit and finds the
- * invoice in sending rather than the committed draft.
+ * The lookup runs inside the transaction, which takes SQLite's write lock at
+ * BEGIN (config/database.php), so a report that arrives while a send still
+ * holds the lock waits for its commit and finds the invoice in sending, not the
+ * draft a read outside a transaction would see.
  */
 final readonly class MarkInvoiceDeliveredService
 {
