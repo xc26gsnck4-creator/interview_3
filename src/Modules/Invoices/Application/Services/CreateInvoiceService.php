@@ -10,11 +10,9 @@ use Modules\Invoices\Application\Data\ProductLineData;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
- * Customer name and email arrive validated from the HTTP edge; the domain
- * owns the status and the line rules. A rejected line rolls back the whole
- * invoice, and so do lines whose total does not fit in int: totalPrice() is
- * called for that check alone. The lines createMany() returns become the
- * loaded relation without another query; they are in creation order, the
+ * A rejected line or a total that does not fit in int rolls back the whole
+ * invoice; totalPrice() is called for that check alone. The lines createMany()
+ * returns become the loaded relation without another query, in the creation
  * order productLines() defines.
  */
 final readonly class CreateInvoiceService

@@ -8,13 +8,10 @@ use Illuminate\Database\ConnectionInterface;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
- * Strict: an unknown invoice or one not in sending is an exception; the
- * webhook listener decides what to tolerate. The lookup and the transition
- * share one transaction, which takes SQLite's write lock at BEGIN
- * (config/database.php). SendInvoiceService notifies before it commits, so a
- * delivery report can arrive while the send still holds that lock: it waits
- * for the commit, then finds the invoice in sending. Read outside a
- * transaction, it would find the committed draft and be rejected.
+ * Strict: the webhook listener decides what to tolerate. The lookup runs in
+ * the transaction, which takes SQLite's write lock at BEGIN, so a report that
+ * arrives while a send still holds the lock waits for its commit and finds the
+ * invoice in sending rather than the committed draft.
  */
 final readonly class MarkInvoiceDeliveredService
 {

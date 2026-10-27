@@ -19,11 +19,8 @@ use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
 
 /**
- * Status is deliberately not fillable: mass assignment can never set it, and
- * the creating hook pins draft. After creation the status transitions are the
- * only code that changes it; nothing on the model stops a direct assignment
- * and save(). Quiet saves and query-builder writes bypass model events, as
- * Eloquent defines them.
+ * Status is not fillable, so mass assignment never sets it: the creating hook
+ * pins draft and the two transitions change it afterwards.
  *
  * @property string $id
  * @property string $customer_name
@@ -45,10 +42,8 @@ final class Invoice extends Model
     protected $attributes = ['status' => StatusEnum::Draft->value];
 
     /**
-     * The lookup by id every use case shares: a missing invoice is reported as
-     * InvoiceNotFound rather than Eloquent's ModelNotFoundException. A uuid is
-     * case-insensitive on input, while ids are stored lowercase and SQLite
-     * compares them case-sensitively, so the id is lowercased first.
+     * Ids are stored lowercase and SQLite compares them case-sensitively, so a
+     * uuid typed in upper case is lowercased first.
      */
     public static function findOrThrow(string $invoiceId): self
     {
@@ -56,9 +51,8 @@ final class Invoice extends Model
     }
 
     /**
-     * Ordered by id, which is creation order: HasUuids generates UUIDv7, time
-     * ordered and monotonic within one process. Without an ORDER BY the
-     * database may return the lines in any order.
+     * Ordered by id, which is creation order: HasUuids generates time-ordered
+     * UUIDv7 ids.
      *
      * @return HasMany<InvoiceProductLine, $this>
      */
@@ -68,11 +62,8 @@ final class Invoice extends Model
     }
 
     /**
-     * Summed from the loaded `productLines` relation (Eloquent loads it when it
-     * is not loaded yet), so a response renders the total from the same lines
-     * it lists and runs no query after a write's commit. A single line total
-     * fits in int because of InvoiceProductLine::MAX_VALUE; the sum across
-     * lines may not, so the addition is checked.
+     * A line total always fits in int (InvoiceProductLine::MAX_VALUE caps both
+     * factors), but the sum may not, so only the addition is checked.
      */
     public function totalPrice(): int
     {
@@ -92,11 +83,8 @@ final class Invoice extends Model
     }
 
     /**
-     * The send rule, also usable as a dry check. The status is checked first.
-     * The lines are read fresh into the loaded relation.
-     * The stored line amounts are checked again although model writes already
-     * guarantee them, so the rule also catches a row written past the model
-     * events whose amount reads as an integer out of range.
+     * The stored amounts are checked again, so a line written past the model
+     * events with an amount out of range cannot be sent.
      */
     public function ensureCanBeSent(): void
     {
@@ -114,9 +102,8 @@ final class Invoice extends Model
     }
 
     /**
-     * The send rule runs before the claim, so no caller can skip it. The claim
-     * itself guards only the status: lines are supplied at creation and nothing
-     * in the application writes them between the check and the claim.
+     * The claim guards only the status, because nothing in the application
+     * writes lines after creation.
      */
     public function markAsSending(): void
     {
@@ -137,10 +124,6 @@ final class Invoice extends Model
         return ['status' => StatusEnum::class];
     }
 
-    /**
-     * Rejects a non-draft status on create, including one assigned directly
-     * ($invoice->status = ...; $invoice->save()).
-     */
     protected static function booted(): void
     {
         self::creating(static function (Invoice $invoice): void {
@@ -158,19 +141,9 @@ final class Invoice extends Model
     }
 
     /**
-     * The in-memory check gives a clear error before any write. The conditional
-     * update is the atomic claim: of two instances holding the same status, only
-     * one update matches the row, with no row lock (SQLite compiles lockForUpdate
-     * to nothing). It runs on the base query with an explicit timestamp, so the
-     * instance gets exactly the updated_at the row got. The base query leaves the
-     * instance's original values alone, so the written ones are synced as
-     * original afterwards and a later save() does not write the status again.
-     * A lost claim takes over only the stored status, leaving the instance's
-     * other attributes and relations alone. The re-read sees the current row:
-     * inside a transaction this connection holds SQLite's write lock by now,
-     * taken at BEGIN when transactions begin IMMEDIATE and by the zero-row
-     * update otherwise; outside one the update has already committed.
-     * Both queries run on this instance's connection.
+     * The conditional update is the atomic claim: of two instances holding the
+     * same status only one update matches the row, and SQLite has no row lock
+     * to take instead (lockForUpdate compiles to nothing).
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
     {

@@ -13,13 +13,10 @@ use Psr\Log\LoggerInterface;
 /**
  * The tolerance for delivery reports lives here, at the boundary to the
  * Notifications module: a report for an unknown invoice or one not in sending
- * is logged and ignored, so the webhook still answers 204. Only those two
- * rejections are caught. Anything else, such as a database-locked error at
- * BEGIN, propagates and the webhook answers the app-wide busy 503
- * (DatabaseLockedRenderer), which the provider can retry.
- * Eloquent's ModelNotFoundException is not among them: the service holds the
- * write lock from the lookup to the transition, so the row cannot be deleted
- * in between.
+ * is logged and ignored, so the webhook still answers 204. Anything else, such
+ * as a database-locked error, propagates and answers a status the provider can
+ * retry. ModelNotFoundException is not caught, because the service holds the
+ * write lock from the lookup to the transition.
  */
 final readonly class WebhookDeliveredListener
 {

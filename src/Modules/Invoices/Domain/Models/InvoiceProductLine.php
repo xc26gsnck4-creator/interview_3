@@ -31,8 +31,7 @@ final class InvoiceProductLine extends Model
     use HasUuids;
 
     /**
-     * A deliberate cap at 2^31 - 1, which keeps quantity * unit_price inside
-     * PHP's int (the overflow tests rely on this exact value).
+     * 2^31 - 1, so quantity * unit_price always fits in PHP's int.
      */
     public const int MAX_VALUE = 2_147_483_647;
 
@@ -50,9 +49,8 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * The amounts rule as a check instead of a rejection, so the send rule also
-     * catches a row written past the model events. It reads the cast integers:
-     * a stored value PHP cannot cast to int throws instead.
+     * The amounts rule as a check, so the send rule also catches a line written
+     * past the model events.
      */
     public function hasValidAmounts(): bool
     {
@@ -67,12 +65,6 @@ final class InvoiceProductLine extends Model
         return ['quantity' => 'integer', 'unit_price' => 'integer'];
     }
 
-    /**
-     * Checks the amounts on creating and updating, so each Eloquent write path
-     * (create, save, update) validates once. Query-builder and quiet writes
-     * bypass model events by Eloquent design, and the schema is fixed by the
-     * task.
-     */
     protected static function booted(): void
     {
         $assertValidAmounts = static function (InvoiceProductLine $line): void {
@@ -88,9 +80,8 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * The value is null on a new line whose amount is unset or set to null: the
-     * integer cast leaves null alone. The NOT NULL column keeps null out of
-     * stored rows.
+     * Null on a new line whose amount is unset or null, because the integer cast
+     * leaves null alone.
      */
     private static function isValidAmount(?int $value): bool
     {

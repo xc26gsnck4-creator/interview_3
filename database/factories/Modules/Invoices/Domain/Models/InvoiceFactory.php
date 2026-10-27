@@ -44,8 +44,7 @@ final class InvoiceFactory extends Factory
     }
 
     /**
-     * Test-only shortcut past the transitions: invoices are created as draft and
-     * then saved with the requested status. Draft leaves the invoice as created.
+     * A test-only shortcut past the transitions.
      */
     public function inStatus(StatusEnum $status): self
     {
