@@ -53,7 +53,7 @@ final readonly class SendInvoiceService
                 $invoice = Invoice::findOrThrow($invoiceId);
                 $invoice->markAsSending();
 
-                $total = $invoice->totalPriceOfLoadedLines();
+                $total = $invoice->totalPrice();
 
                 $data = new NotifyData(
                     resourceId: Uuid::fromString($invoice->id),

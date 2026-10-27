@@ -6,7 +6,6 @@ namespace Modules\Invoices\Domain\Models;
 
 use Database\Factories\Modules\Invoices\Domain\Models\InvoiceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -69,35 +68,32 @@ final class Invoice extends Model
     }
 
     /**
-     * Computed from the stored lines so it is never stale (one query per call).
+     * Summed from the loaded `productLines` relation (Eloquent loads it when it
+     * is not loaded yet), so a response renders the total from the same lines
+     * it lists and runs no query after a write's commit. A single line total
+     * fits in int because of InvoiceProductLine::MAX_VALUE; the sum across
+     * lines may not, so the addition is checked.
      */
     public function totalPrice(): int
     {
-        return $this->sumLineTotals($this->productLines()->get());
-    }
+        $total = 0;
 
-    /**
-     * Summed from the loaded `productLines` relation (Eloquent loads it when it
-     * is not loaded yet). A response renders the total from the same lines it
-     * lists and runs no query after a write's commit; totalPrice() keeps
-     * reading the stored lines fresh.
-     */
-    public function totalPriceOfLoadedLines(): int
-    {
-        return $this->sumLineTotals($this->productLines);
-    }
+        foreach ($this->productLines as $line) {
+            $lineTotal = $line->totalUnitPrice();
 
-    /**
-     * Each line total fits in int, but the sum of several may not; an invoice
-     * whose total cannot be computed could never be shown or sent.
-     */
-    public function ensureTotalFits(): void
-    {
-        $this->totalPrice();
+            if ($lineTotal > PHP_INT_MAX - $total) {
+                throw InvoiceTotalOverflow::forInvoice($this->id);
+            }
+
+            $total += $lineTotal;
+        }
+
+        return $total;
     }
 
     /**
      * The send rule, also usable as a dry check. The status is checked first.
+     * The lines are loaded fresh, and the send reuses them for the total.
      * The stored line amounts are checked again although model writes already
      * guarantee them, so the rule also catches a row written past the model
      * events whose amount reads as an integer out of range.
@@ -106,7 +102,7 @@ final class Invoice extends Model
     {
         $this->ensureStatusIs(StatusEnum::Draft, StatusEnum::Sending);
 
-        $lines = $this->productLines()->get();
+        $lines = $this->load('productLines')->productLines;
 
         if ($lines->isEmpty()) {
             throw InvoiceNotSendable::noProductLines($this->id);
@@ -152,29 +148,6 @@ final class Invoice extends Model
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
             }
         });
-    }
-
-    /**
-     * A single line total fits in int because of InvoiceProductLine::MAX_VALUE;
-     * the sum across lines may not, so the addition is checked.
-     *
-     * @param  Collection<int, InvoiceProductLine>  $lines
-     */
-    private function sumLineTotals(Collection $lines): int
-    {
-        $total = 0;
-
-        foreach ($lines as $line) {
-            $lineTotal = $line->totalUnitPrice();
-
-            if ($lineTotal > PHP_INT_MAX - $total) {
-                throw InvoiceTotalOverflow::forInvoice($this->id);
-            }
-
-            $total += $lineTotal;
-        }
-
-        return $total;
     }
 
     private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void

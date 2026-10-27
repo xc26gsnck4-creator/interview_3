@@ -29,7 +29,7 @@ final class InvoiceResource extends JsonResource
             'customer_name' => $this->resource->customer_name,
             'customer_email' => $this->resource->customer_email,
             'product_lines' => InvoiceProductLineResource::collection($this->resource->productLines),
-            'total_price' => $this->resource->totalPriceOfLoadedLines(),
+            'total_price' => $this->resource->totalPrice(),
         ];
     }
 }
