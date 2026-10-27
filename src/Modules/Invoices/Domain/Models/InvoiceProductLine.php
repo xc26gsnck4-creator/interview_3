@@ -61,12 +61,18 @@ final class InvoiceProductLine extends Model
         return ['quantity' => 'integer', 'unit_price' => 'integer'];
     }
 
+    /**
+     * The amounts are read as given, not through the integer cast, which would
+     * turn 1.5 into 1 and let the fraction reach the database.
+     */
     protected static function booted(): void
     {
         $assertValidAmounts = static function (InvoiceProductLine $line): void {
-            foreach (['quantity' => $line->quantity, 'unit_price' => $line->unit_price] as $field => $value) {
-                if (! self::isValidAmount($value)) {
-                    throw InvalidProductLine::outOfRange($field, $value);
+            $attributes = $line->getAttributes();
+
+            foreach (['quantity', 'unit_price'] as $field) {
+                if (! self::isValidAmount($attributes[$field] ?? null)) {
+                    throw InvalidProductLine::outOfRange($field, $attributes[$field] ?? null);
                 }
             }
         };
@@ -75,12 +81,8 @@ final class InvoiceProductLine extends Model
         self::updating($assertValidAmounts);
     }
 
-    /**
-     * Nullable because the integer cast leaves an unset or null amount on a new
-     * line as null.
-     */
-    private static function isValidAmount(?int $value): bool
+    private static function isValidAmount(mixed $value): bool
     {
-        return $value !== null && $value >= 1 && $value <= self::MAX_VALUE;
+        return is_int($value) && $value >= 1 && $value <= self::MAX_VALUE;
     }
 }

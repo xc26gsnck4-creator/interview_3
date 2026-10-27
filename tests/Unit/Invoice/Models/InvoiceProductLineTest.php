@@ -32,24 +32,30 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', ?int, string}>
+     * @return Iterator<string, array{'quantity'|'unit_price', int|float|string|null, string}>
      */
-    public static function outOfRangeValues(): Iterator
+    public static function invalidAmounts(): Iterator
     {
         yield 'quantity zero' => ['quantity', 0, '0'];
         yield 'quantity negative' => ['quantity', -1, '-1'];
         yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'quantity fractional' => ['quantity', 1.5, '1.5'];
         yield 'unit price zero' => ['unit_price', 0, '0'];
         yield 'unit price negative' => ['unit_price', -1, '-1'];
         yield 'unit price above MAX_VALUE' => ['unit_price', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'unit price as text' => ['unit_price', '2', "'2'"];
         yield 'unit price null' => ['unit_price', null, 'NULL'];
     }
 
     /**
+     * The values are checked as given, before the integer cast, so a fraction
+     * is rejected rather than truncated and a numeric string is not read as
+     * an integer.
+     *
      * @param  'quantity'|'unit_price'  $field
      */
-    #[DataProvider('outOfRangeValues')]
-    public function test_rejects_amounts_out_of_range(string $field, ?int $value, string $renderedValue): void
+    #[DataProvider('invalidAmounts')]
+    public function test_rejects_amounts_that_are_not_integers_in_range(string $field, int|float|string|null $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
@@ -59,11 +65,25 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
-    public function test_rejects_non_positive_values_on_update(): void
+    /**
+     * The fraction's integer part differs from the stored value: Eloquent
+     * compares cast values to decide what is dirty, so 2.5 over a stored 2
+     * would not reach the updating listener at all.
+     *
+     * @return Iterator<string, array{int|float}>
+     */
+    public static function invalidAmountsOnUpdate(): Iterator
+    {
+        yield 'zero' => [0];
+        yield 'fractional' => [1.5];
+    }
+
+    #[DataProvider('invalidAmountsOnUpdate')]
+    public function test_rejects_invalid_amounts_on_update(int|float $value): void
     {
         $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
 
-        $this->assertThrows(fn () => $line->update(['quantity' => 0]), InvalidProductLine::class);
+        $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
         $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
     }
 }
