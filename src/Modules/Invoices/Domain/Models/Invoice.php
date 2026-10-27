@@ -97,9 +97,9 @@ final class Invoice extends Model
 
     /**
      * The send rule, also usable as a dry check. The status is checked first.
-     * The stored lines are checked again although model writes already
-     * guarantee them, so the rule reads completely here and also catches a row
-     * written past the model events.
+     * The stored line amounts are checked again although model writes already
+     * guarantee them, so the rule also catches a row written past the model
+     * events.
      */
     public function ensureCanBeSent(): void
     {
