@@ -11,7 +11,7 @@ use Tests\TestCase;
 final class AppServiceProviderTest extends TestCase
 {
     /**
-     * The guards are static switches that outlive the application, so the
+     * Model's strictness switches are static and outlive the application, so the
      * provider is booted as testing again to put back the state a test changed.
      */
     protected function tearDown(): void

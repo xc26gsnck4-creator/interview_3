@@ -92,31 +92,21 @@ final class SendInvoiceTest extends TestCase
     /**
      * A client error, so it is not reported.
      */
-    public function test_rejects_invoice_not_in_draft_with_409(): void
-    {
-        $exceptions = Exceptions::fake();
-        $invoice = Invoice::factory()->withLines()->sentToClient()->create();
-
-        $response = $this->postJson(route('invoices.send', $invoice->id));
-
-        $response->assertConflict()->assertExactJson([
-            'message' => sprintf('Invoice %s cannot move from sent-to-client to sending.', $invoice->id),
-        ]);
-        self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
-        $exceptions->assertNotReported(InvalidInvoiceStatusTransition::class);
-    }
-
     public function test_second_send_is_rejected_with_409(): void
     {
+        $exceptions = Exceptions::fake();
         $invoice = Invoice::factory()->withLines()->create();
 
         $first = $this->postJson(route('invoices.send', $invoice->id));
         $second = $this->postJson(route('invoices.send', $invoice->id));
 
         $first->assertOk();
-        $second->assertConflict();
+        $second->assertConflict()->assertExactJson([
+            'message' => sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
+        ]);
         self::assertCount(1, $this->notifications->notified);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
+        $exceptions->assertNotReported(InvalidInvoiceStatusTransition::class);
     }
 
     public function test_returns_404_for_unknown_invoice(): void

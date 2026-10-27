@@ -27,7 +27,7 @@ final class MarkInvoiceDeliveredServiceTest extends TestCase
 
     public function test_throws_transition_when_not_sending(): void
     {
-        $invoice = Invoice::factory()->withLines()->create();
+        $invoice = Invoice::factory()->create();
 
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),

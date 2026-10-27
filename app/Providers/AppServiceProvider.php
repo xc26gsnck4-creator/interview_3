@@ -12,9 +12,9 @@ use Illuminate\Support\ServiceProvider;
 use PDO;
 
 /**
- * Runtime guards: Eloquent is strict outside production, so lazy loading,
- * discarded mass assignment and unloaded attributes fail in development and
- * tests while production stays lenient. SQLite connections are built as
+ * Eloquent is strict outside production, so lazy loading, discarded mass
+ * assignment and unloaded attributes fail in development and tests while
+ * production stays lenient. SQLite connections are built as
  * App\Database\SQLiteConnection, which rolls back a transaction whose commit
  * failed; the resolver is registered before any connection is made.
  */
@@ -34,8 +34,6 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $isProduction = $this->app->environment('production');
-
-        Model::shouldBeStrict(! $isProduction);
+        Model::shouldBeStrict(! $this->app->environment('production'));
     }
 }

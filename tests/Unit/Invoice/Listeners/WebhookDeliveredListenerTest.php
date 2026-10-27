@@ -52,7 +52,7 @@ final class WebhookDeliveredListenerTest extends TestCase
 
     public function test_logs_and_ignores_invoice_not_in_sending(): void
     {
-        $invoice = Invoice::factory()->withLines()->create();
+        $invoice = Invoice::factory()->create();
         $this->logger->expects($this->once())->method('warning')->with('Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoice->id,
             'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
