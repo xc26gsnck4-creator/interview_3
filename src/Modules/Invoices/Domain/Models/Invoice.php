@@ -21,9 +21,9 @@ use Override;
 
 /**
  * Status is deliberately not fillable: mass assignment can never set it,
- * the creating hook pins draft, the updating hook rejects direct writes, and
- * the status transitions are the sanctioned way to change it. Quiet saves and
- * query-builder writes bypass model events, as Eloquent defines them.
+ * the creating hook pins draft, and the status transitions are the sanctioned
+ * way to change it. Quiet saves and query-builder writes bypass model events,
+ * as Eloquent defines them.
  *
  * @property string $id
  * @property string $customer_name
@@ -141,23 +141,14 @@ final class Invoice extends Model
     }
 
     /**
-     * The creating hook closes the direct-assignment path on a new invoice
-     * ($invoice->status = ...; $invoice->save()), the updating hook on a stored
-     * one. getOriginal() is untyped, so the updating hook reads the stored
-     * status from a copy built from the original attributes.
+     * Also closes the direct-assignment path on a new invoice
+     * ($invoice->status = ...; $invoice->save()).
      */
     protected static function booted(): void
     {
         self::creating(static function (Invoice $invoice): void {
             if ($invoice->status !== StatusEnum::Draft) {
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
-            }
-        });
-        self::updating(static function (Invoice $invoice): void {
-            if ($invoice->isDirty('status')) {
-                $stored = $invoice->newInstance()->setRawAttributes($invoice->getRawOriginal());
-
-                throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
             }
         });
     }
@@ -198,9 +189,10 @@ final class Invoice extends Model
      * one update matches the row, with no row lock (SQLite compiles lockForUpdate
      * to nothing). It runs on the base query with an explicit timestamp, so the
      * instance gets exactly the updated_at the row got. It fires no model events,
-     * so syncing the original afterwards keeps a later save() on this instance
-     * from tripping the updating hook. A lost claim takes over only the stored
-     * status, leaving the instance's other attributes and relations alone. The
+     * so the written values are synced as original afterwards, and a later save()
+     * on this instance does not write the status again. A lost claim takes over
+     * only the stored status, leaving the instance's other attributes and
+     * relations alone. The
      * re-read sees the current row: inside a transaction this connection holds
      * SQLite's write lock by now, taken at BEGIN when transactions begin
      * IMMEDIATE and by the zero-row update otherwise; outside one the update has

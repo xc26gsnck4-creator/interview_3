@@ -37,11 +37,6 @@ final class InvoiceProductLine extends Model
     public const int MAX_VALUE = 2_147_483_647;
 
     /**
-     * @var list<'quantity'|'unit_price'>
-     */
-    private const array AMOUNT_FIELDS = ['quantity', 'unit_price'];
-
-    /**
      * @return BelongsTo<Invoice, $this>
      */
     public function invoice(): BelongsTo
@@ -55,17 +50,12 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * The amounts invariant as a check instead of a rejection, read from the raw
-     * attributes, so a row written past the model events (0, 1.5, 'abc', above
-     * MAX_VALUE) fails instead of being cast into range.
+     * The amounts rule as a check instead of a rejection, so the send rule also
+     * catches a row written past the model events.
      */
     public function hasValidAmounts(): bool
     {
-        return array_all(self::AMOUNT_FIELDS, function (string $field): bool {
-            $value = self::toInteger($this->getAttributes()[$field] ?? null);
-
-            return $value !== null && $value >= 1 && $value <= self::MAX_VALUE;
-        });
+        return self::isValidAmount($this->quantity) && self::isValidAmount($this->unit_price);
     }
 
     /**
@@ -77,87 +67,31 @@ final class InvoiceProductLine extends Model
     }
 
     /**
-     * Line amounts are set, never incremented or decremented: the SQL arithmetic
-     * runs against the stored value and cannot be validated in memory. Covers
-     * increment, decrement and their quiet variants. The other parameters
-     * inherit the parent's PHPDoc; the parent documents $extra as a bare array.
-     *
-     * @param  array<mixed>  $extra
-     */
-    protected function incrementOrDecrement($column, $amount, $extra, $method): never
-    {
-        throw InvalidProductLine::arithmeticNotAllowed($column);
-    }
-
-    /**
-     * Same rule as incrementOrDecrement(), for the incrementEach and
-     * decrementEach variants.
-     */
-    protected function incrementOrDecrementEach(array $columns, array $extra, string $method): never
-    {
-        throw InvalidProductLine::arithmeticNotAllowed(array_key_first($columns) ?? 'quantity');
-    }
-
-    /**
-     * Registers the line invariants on creating and updating, so each Eloquent
-     * write path (create, save, update) validates exactly once; increment and
-     * decrement are rejected outright. A line must belong to an invoice, so it is
-     * created through Invoice::productLines(). Query-builder writes bypass model
-     * events by Eloquent design, and the schema is fixed by the task.
+     * Checks the amounts on creating and updating, so each Eloquent write path
+     * (create, save, update) validates once. Query-builder and quiet writes
+     * bypass model events by Eloquent design, and the schema is fixed by the
+     * task.
      */
     protected static function booted(): void
     {
-        self::creating(static function (InvoiceProductLine $line): void {
-            $invoiceId = $line->getAttributes()['invoice_id'] ?? null;
-
-            if ($invoiceId === null || $invoiceId === '') {
-                throw InvalidProductLine::withoutInvoice();
+        $assertValidAmounts = static function (InvoiceProductLine $line): void {
+            foreach (['quantity' => $line->quantity, 'unit_price' => $line->unit_price] as $field => $value) {
+                if (! self::isValidAmount($value)) {
+                    throw InvalidProductLine::outOfRange($field, $value);
+                }
             }
+        };
 
-            self::assertValidAmounts($line);
-        });
-        self::updating(static fn (InvoiceProductLine $line) => self::assertValidAmounts($line));
+        self::creating($assertValidAmounts);
+        self::updating($assertValidAmounts);
     }
 
     /**
-     * Quantity and unit price must be integers between 1 and MAX_VALUE. The raw
-     * attribute is validated, not the cast value, so 1.5 or '2widgets' cannot be
-     * silently truncated. Valid values are normalised to int.
+     * The value is null on a new line whose amount was never set: the integer
+     * cast leaves null alone.
      */
-    private static function assertValidAmounts(self $line): void
+    private static function isValidAmount(?int $value): bool
     {
-        foreach (self::AMOUNT_FIELDS as $field) {
-            $raw = $line->getAttributes()[$field] ?? null;
-            $value = self::toInteger($raw);
-
-            if ($value === null) {
-                throw InvalidProductLine::notAnInteger($field, $raw);
-            }
-
-            if ($value < 1) {
-                throw InvalidProductLine::nonPositive($field, $value);
-            }
-
-            if ($value > self::MAX_VALUE) {
-                throw InvalidProductLine::tooLarge($field, $value);
-            }
-
-            $line->setAttribute($field, $value);
-        }
-    }
-
-    /**
-     * The parse step both amount checks share: only an int or an integer string
-     * is an integer here, so 1.5, '2widgets', true and null are not.
-     */
-    private static function toInteger(mixed $raw): ?int
-    {
-        if (! is_int($raw) && ! is_string($raw)) {
-            return null;
-        }
-
-        $value = filter_var($raw, FILTER_VALIDATE_INT);
-
-        return $value === false ? null : $value;
+        return $value !== null && $value >= 1 && $value <= self::MAX_VALUE;
     }
 }

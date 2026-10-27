@@ -81,7 +81,7 @@ final class CreateInvoiceServiceTest extends TestCase
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($data),
             InvalidProductLine::class,
-            'Product line quantity must be a positive integer, 0 given.',
+            'Product line quantity must be an integer between 1 and 2147483647, 0 given.',
         );
         $this->assertDatabaseCount('invoices', 0);
         $this->assertDatabaseCount('invoice_product_lines', 0);
