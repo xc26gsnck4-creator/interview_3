@@ -54,7 +54,7 @@ flowchart TD;
 5. **Notify inside the transaction, then commit.** Claim `draft → sending`, call `NotificationFacadeInterface::notify()`, commit. A throwing notification rolls the claim back. Why: a committed `sending` then means the notification went out, which is the README's "change the status after sending". Instead of: committing the claim first and compensating with `sending → draft`, or an outbox (queued notifications are out of scope). ([#12])
 6. **A failed notification answers 503.** `NotificationFailed` wraps any throwable from the facade, `\Error` included. The body says the invoice remains in draft and the send can be retried; the driver's own message never reaches the client. Why: 503 tells the client to retry. Instead of: Laravel's 500. ([#12], [#16])
 7. **Transactions begin `IMMEDIATE` with a 5 s busy timeout.** The write lock is taken at `BEGIN`, so a concurrent send waits, then reads `sending` and gets a clean 409. Why: under SQLite's default `DEFERRED` mode, a transaction that read before it wrote failed at once with "database is locked", because SQLite does not wait to upgrade a read lock. Instead of: `DEFERRED` transactions. ([#13])
-8. **A lock past the busy timeout answers Laravel's 500.** A request that waits longer than 5 s fails at `BEGIN`, before it writes anything, and answers the framework's reported 500. A send whose commit fails after `notify()` answers the same 500 and stays `draft` with the customer notified (see [What the send ordering costs](#what-the-send-ordering-costs)). Why: one scenario, the database held for more than 5 s, does not justify a connection subclass, an exception renderer and an exception of its own, and the README's failure criterion is the send and delivery workflow. Instead of: a 503 for SQLite's busy codes, a connection that rolls back a failed commit at once and a dedicated not-recorded 500 (built in [#13] and [#16], removed in [#28]).
+8. **A lock past the busy timeout answers Laravel's 500.** A request that waits longer than 5 s fails at `BEGIN`, before it writes anything, and the framework's handler answers a reported 500 on any route; a commit that fails on the lock answers the same 500 (for a send, see [What the send ordering costs](#what-the-send-ordering-costs)). It is Laravel's default, so it has no test of its own. Why: SQLite keeps a transaction whose commit failed open until the request's connection closes, which rolls it back and releases the lock, and the README's failure criterion is the send and delivery workflow, which decisions 5 and 6 answer. Instead of: a 503 for SQLite's busy codes, a connection that rolls back a failed commit at once and a dedicated 500 for a send that notified but did not commit (built in [#13] and [#16]). ([#28])
 9. **Create reads the JSON body only.** Form bodies and query parameters are ignored (a form-encoded request answers 422), amounts must be JSON integers (`integer:strict`), and a malformed body validates as empty. Why: one input format with exact types, and bytes that are not UTF-8 never reach the database. Instead of: Laravel's default merge of query, form and JSON input. ([#15])
 
 ## Testing strategy
@@ -71,7 +71,7 @@ Each decision is tested in full at the layer that makes it, and each layer above
 
 ## Failure behaviour
 
-The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)).
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except decision 8's 500, Laravel's default, marked –.
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -88,14 +88,14 @@ The Test column names the tests that check the response. Where a row lists sever
 | Invoice in `sending` or `sent-to-client`, such as a second send | 409, nothing notified again | unchanged | [`SendInvoiceTest`] |
 | No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
 | The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
-| The commit fails after the notification | 500, reported; sending again notifies again | `draft` | – (decision 8) |
+| The commit fails after the notification | 500, reported; sending again notifies again | `draft` | – |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |
-| The database stays locked past the 5 s busy timeout | 500, reported, nothing written | unchanged | – (decision 8; [`SqliteTransactionsTest`] shows the failure at `BEGIN`) |
+| The database stays locked past the 5 s busy timeout | 500, reported, nothing written | unchanged | – |
 
 Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the `Accept` header.
 
@@ -104,9 +104,9 @@ Every error is JSON (`{"message": ...}`, plus `errors` for a 422), whatever the 
 Decision 5 was confirmed knowing these consequences:
 
 - SQLite's database-wide write lock is held from `BEGIN` until the commit, so other writers wait while `notify()` runs. The provided `DummyDriver` returns at once.
-- A concurrent second send waits, then gets 409. If the wait runs out it fails at `BEGIN` with a 500. Either way it never notifies.
-- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If the send rolls back instead, the report finds `draft` and is ignored with a warning (204). If it waits past the timeout, the webhook answers 500, so the provider sees that the report failed.
-- A commit that fails after the notification answers a 500 and leaves the invoice in draft, so sending it again notifies the customer again. SQLite keeps the failed transaction open, with its lock, until the request's connection closes and rolls it back (decision 8).
+- A concurrent second send waits, then gets 409, or fails at `BEGIN` once the wait runs out. Either way it never notifies.
+- A delivery report that arrives before the send commits waits at `BEGIN`, because the delivery runs in a transaction too, and then moves the invoice to `sent-to-client`. If the send rolls back instead, the report finds `draft` and is ignored with a warning (204).
+- A commit that fails after the notification answers a 500 and leaves the invoice in draft, so sending it again notifies the customer again.
 - A failed notification does not tell whether the email arrived. A provider that delivers and then throws gets its send rolled back, and a retry sends a duplicate. `NotifyData` carries the invoice uuid as its reference, which a real provider can deduplicate on.
 
 ## Known limitations
@@ -192,4 +192,3 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [`SendInvoiceTest`]: tests/Feature/Invoice/Http/SendInvoiceTest.php
 [`DeliveryWebhookTest`]: tests/Feature/Invoice/DeliveryWebhookTest.php
 [`InvoiceLifecycleTest`]: tests/Feature/Invoice/InvoiceLifecycleTest.php
-[`SqliteTransactionsTest`]: tests/Feature/Database/SqliteTransactionsTest.php

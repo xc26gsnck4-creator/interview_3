@@ -13,11 +13,10 @@ use Psr\Log\LoggerInterface;
 /**
  * The tolerance for delivery reports lives here, at the boundary to the
  * Notifications module: a report for an unknown invoice or one not in sending
- * is logged and ignored, so the webhook still answers 204. Anything else, such
- * as a lock past the busy timeout, propagates and answers 500, so the provider
- * sees that the report failed. ModelNotFoundException is not caught: the
- * service holds the write lock from the lookup to the transition, so the row
- * cannot be deleted in between.
+ * is logged and ignored, so the webhook still answers 204. Anything else
+ * propagates, so the provider sees that the report failed.
+ * ModelNotFoundException is not caught: the service holds the write lock from
+ * the lookup to the transition, so the row cannot be deleted in between.
  */
 final readonly class WebhookDeliveredListener
 {
