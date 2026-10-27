@@ -66,11 +66,21 @@
             "@putenv APP_URL=http://localhost",
             "@putenv API_VERSION=0.0.1",
             "@php artisan scramble:export --fail-on-unknown"
+        ],
+        "lint": "pint --test",
+        "test": "@php artisan test --compact",
+        "check": [
+            "@lint",
+            "@phpstan",
+            "@test"
         ]
     },
     "scripts-descriptions": {
         "phpstan": "Runs PHPStan from a cold tmpDir (phpstan.neon): under Docker Desktop its caches trust a stale directory stat and can skip new files.",
-        "api:export": "Regenerates api.json, the OpenAPI document, with Scramble and fails on an unknown type. APP_NAME, APP_URL and API_VERSION reach the document, so the config cache is cleared and they are pinned here and in phpunit.xml."
+        "api:export": "Regenerates api.json, the OpenAPI document, with Scramble and fails on an unknown type. APP_NAME, APP_URL and API_VERSION reach the document, so the config cache is cleared and they are pinned here and in phpunit.xml.",
+        "lint": "Checks the code style with Pint (pint.json) without changing any file.",
+        "test": "Runs the test suite on in-memory SQLite.",
+        "check": "Runs lint, phpstan and test in that order and stops at the first failure. api:export stays out: it writes api.json, and the suite already fails on a stale one."
     },
     "extra": {
         "laravel": {
