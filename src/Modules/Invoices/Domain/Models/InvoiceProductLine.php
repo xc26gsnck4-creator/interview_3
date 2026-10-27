@@ -48,9 +48,14 @@ final class InvoiceProductLine extends Model
         return $this->quantity * $this->unit_price;
     }
 
+    /**
+     * Read as given, like the listener, so a stored fraction is not sendable.
+     */
     public function hasValidAmounts(): bool
     {
-        return self::isValidAmount($this->quantity) && self::isValidAmount($this->unit_price);
+        $attributes = $this->getAttributes();
+
+        return self::isValidAmount($attributes['quantity'] ?? null) && self::isValidAmount($attributes['unit_price'] ?? null);
     }
 
     /**

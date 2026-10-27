@@ -62,6 +62,19 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
+     * The listener runs on every save of a stored line, so it must accept the
+     * amounts as the driver returns them.
+     */
+    public function test_updates_a_valid_amount(): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
+
+        $line->update(['quantity' => 3]);
+
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 3]);
+    }
+
+    /**
      * The fraction keeps the stored integer part: Eloquent's dirty comparison
      * reads both through the cast and sees no change, so only a check that
      * runs before it, on saving, can reject the value.

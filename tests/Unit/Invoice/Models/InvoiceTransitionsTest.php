@@ -44,13 +44,14 @@ final class InvoiceTransitionsTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', int|string}>
+     * @return Iterator<string, array{'quantity'|'unit_price', int|float|string}>
      */
     public static function invalidPersistedValues(): Iterator
     {
         yield 'zero quantity' => ['quantity', 0];
         yield 'negative unit price' => ['unit_price', -1];
         yield 'text unit price' => ['unit_price', 'abc'];
+        yield 'fractional quantity' => ['quantity', 1.5];
         yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1];
     }
 
@@ -60,7 +61,7 @@ final class InvoiceTransitionsTest extends TestCase
      * a valid one, so every line is checked, not only the first.
      */
     #[DataProvider('invalidPersistedValues')]
-    public function test_ensure_can_be_sent_throws_not_sendable_when_a_persisted_line_is_invalid(string $field, int|string $value): void
+    public function test_ensure_can_be_sent_throws_not_sendable_when_a_persisted_line_is_invalid(string $field, int|float|string $value): void
     {
         $invoice = Invoice::factory()->withLines()->create();
         InvoiceProductLine::factory()->for($invoice)->createQuietly([$field => $value]);
