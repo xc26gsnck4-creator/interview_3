@@ -47,7 +47,7 @@ flowchart TD;
 
 ## Decisions
 
-1. **Eloquent models are the domain.** `Invoice` and `InvoiceProductLine` carry the rules; the services use them directly. Why: for one aggregate on a fixed schema, a repository would only forward to Eloquent. Instead of: repository interfaces with Eloquent implementations. ([#2])
+1. **Eloquent models are the domain.** `Invoice` and `InvoiceProductLine` carry the rules; the services use them directly. Why: for one aggregate on a fixed schema, a repository would only forward to Eloquent. Instead of: repository interfaces with Eloquent implementations. At scale: a second aggregate, a second store or a rule that must run without the database would move the services onto a repository interface declared in the Domain and implemented in Infrastructure over these models, with a mapper to plain entities, and the phpat whitelist would drop Eloquent from the Domain. Today that would be an interface, an implementation, a mapper and two entities that only forward to Eloquent. ([#2], [#32])
 2. **Every rule and both transitions live on the models.** A new invoice is always `draft` (the default; a `creating` listener rejects any other status), quantity and unit price are checked on create and update as given, before the integer cast, so a fraction or a numeric string is rejected instead of truncated, and `markAsSending()` runs the send rule itself. The one rule a caller invokes is the total check: the create service computes `totalPrice()` over the lines it has just stored, and an overflow rolls the invoice back. Create is the only endpoint that stores lines, so the send rule does not repeat it. Why: no service can create an invoice outside draft, store an invalid line or send an invoice the README forbids sending. Instead of: rules in the form request or the services. ([#2], [#9], [#30])
 3. **Transitions are atomic conditional updates.** `UPDATE … SET status = 'sending' WHERE id = ? AND status = 'draft'`: zero affected rows means another request won, so 409 and no email. `sending → sent-to-client` works the same way. Why: SQLite compiles `lockForUpdate()` to nothing, so a row lock would silently not exist. Instead of: `lockForUpdate()`. ([#9])
 4. **Strict services, tolerant listener.** The services throw. Only `WebhookDeliveredListener` catches "unknown invoice" and "not in `sending`", logs a warning with the id and the reason, and returns. Why: the webhook belongs to the provider and must not fail because of the invoice's state, while the services stay reusable. Instead of: services that swallow errors, or a webhook that answers 4xx. ([#14])
@@ -189,6 +189,7 @@ The README's `ResourceDeliveredEvent` is `WebhookDeliveredEvent` in the provided
 [#16]: https://github.com/xc26gsnck4-creator/interview_3/pull/16
 [#28]: https://github.com/xc26gsnck4-creator/interview_3/pull/28
 [#30]: https://github.com/xc26gsnck4-creator/interview_3/pull/30
+[#32]: https://github.com/xc26gsnck4-creator/interview_3/pull/32
 [`CreateInvoiceTest`]: tests/Feature/Invoice/Http/CreateInvoiceTest.php
 [`ShowInvoiceTest`]: tests/Feature/Invoice/Http/ShowInvoiceTest.php
 [`SendInvoiceTest`]: tests/Feature/Invoice/Http/SendInvoiceTest.php
