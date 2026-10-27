@@ -9,7 +9,7 @@ use Modules\Invoices\Domain\Models\InvoiceProductLine;
 
 final class InvalidProductLine extends DomainException
 {
-    public static function outOfRange(string $field, mixed $value): self
+    public static function invalidAmount(string $field, mixed $value): self
     {
         return new self(sprintf(
             'Product line %s must be an integer between 1 and %d, %s given.',

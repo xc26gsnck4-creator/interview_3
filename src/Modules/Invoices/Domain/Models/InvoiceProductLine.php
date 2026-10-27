@@ -48,9 +48,14 @@ final class InvoiceProductLine extends Model
         return $this->quantity * $this->unit_price;
     }
 
+    /**
+     * Read as given, like the listener, so a stored fraction is not sendable.
+     */
     public function hasValidAmounts(): bool
     {
-        return self::isValidAmount($this->quantity) && self::isValidAmount($this->unit_price);
+        $attributes = $this->getAttributes();
+
+        return self::isValidAmount($attributes['quantity'] ?? null) && self::isValidAmount($attributes['unit_price'] ?? null);
     }
 
     /**
@@ -61,26 +66,32 @@ final class InvoiceProductLine extends Model
         return ['quantity' => 'integer', 'unit_price' => 'integer'];
     }
 
+    /**
+     * The integer cast would turn 1.5 into 1 and let the fraction reach the
+     * database, so the amounts are checked as given: on saving, before
+     * Eloquent's cast-based dirty comparison can drop the change, and on
+     * updating, the only event increment() and decrement() fire.
+     */
     protected static function booted(): void
     {
         $assertValidAmounts = static function (InvoiceProductLine $line): void {
-            foreach (['quantity' => $line->quantity, 'unit_price' => $line->unit_price] as $field => $value) {
+            $attributes = $line->getAttributes();
+
+            foreach (['quantity', 'unit_price'] as $field) {
+                $value = $attributes[$field] ?? null;
+
                 if (! self::isValidAmount($value)) {
-                    throw InvalidProductLine::outOfRange($field, $value);
+                    throw InvalidProductLine::invalidAmount($field, $value);
                 }
             }
         };
 
-        self::creating($assertValidAmounts);
+        self::saving($assertValidAmounts);
         self::updating($assertValidAmounts);
     }
 
-    /**
-     * Nullable because the integer cast leaves an unset or null amount on a new
-     * line as null.
-     */
-    private static function isValidAmount(?int $value): bool
+    private static function isValidAmount(mixed $value): bool
     {
-        return $value !== null && $value >= 1 && $value <= self::MAX_VALUE;
+        return is_int($value) && $value >= 1 && $value <= self::MAX_VALUE;
     }
 }

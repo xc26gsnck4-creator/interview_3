@@ -32,24 +32,26 @@ final class InvoiceProductLineTest extends TestCase
     }
 
     /**
-     * @return Iterator<string, array{'quantity'|'unit_price', ?int, string}>
+     * @return Iterator<string, array{'quantity'|'unit_price', int|float|string|null, string}>
      */
-    public static function outOfRangeValues(): Iterator
+    public static function invalidAmounts(): Iterator
     {
         yield 'quantity zero' => ['quantity', 0, '0'];
         yield 'quantity negative' => ['quantity', -1, '-1'];
         yield 'quantity above MAX_VALUE' => ['quantity', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'quantity fractional' => ['quantity', 1.5, '1.5'];
         yield 'unit price zero' => ['unit_price', 0, '0'];
         yield 'unit price negative' => ['unit_price', -1, '-1'];
         yield 'unit price above MAX_VALUE' => ['unit_price', InvoiceProductLine::MAX_VALUE + 1, '2147483648'];
+        yield 'unit price as text' => ['unit_price', '2', "'2'"];
         yield 'unit price null' => ['unit_price', null, 'NULL'];
     }
 
     /**
      * @param  'quantity'|'unit_price'  $field
      */
-    #[DataProvider('outOfRangeValues')]
-    public function test_rejects_amounts_out_of_range(string $field, ?int $value, string $renderedValue): void
+    #[DataProvider('invalidAmounts')]
+    public function test_rejects_amounts_that_are_not_integers_in_range(string $field, int|float|string|null $value, string $renderedValue): void
     {
         $this->assertThrows(
             fn () => InvoiceProductLine::factory()->create([$field => $value]),
@@ -59,11 +61,50 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
-    public function test_rejects_non_positive_values_on_update(): void
+    /**
+     * The listener runs on every save of a stored line, so it must accept the
+     * amounts as the driver returns them.
+     */
+    public function test_updates_a_valid_amount(): void
     {
-        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
+        $line = InvoiceProductLine::query()->findOrFail(InvoiceProductLine::factory()->create(['quantity' => 2])->id);
 
-        $this->assertThrows(fn () => $line->update(['quantity' => 0]), InvalidProductLine::class);
-        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
+        $line->update(['quantity' => 3]);
+
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 3]);
+    }
+
+    /**
+     * The fraction keeps the stored integer part: Eloquent's dirty comparison
+     * reads both through the cast and sees no change, so only a check that
+     * runs before it, on saving, can reject the value.
+     *
+     * @return Iterator<string, array{int, int|float}>
+     */
+    public static function invalidAmountsOnUpdate(): Iterator
+    {
+        yield 'zero' => [2, 0];
+        yield 'fraction with the stored integer part' => [1, 1.5];
+    }
+
+    #[DataProvider('invalidAmountsOnUpdate')]
+    public function test_rejects_invalid_amounts_on_update(int $stored, int|float $value): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => $stored]);
+
+        $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => $stored]);
+    }
+
+    /**
+     * decrement() fires updating only, never saving, so the check must be
+     * registered there too.
+     */
+    public function test_rejects_a_decrement_below_one(): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => 1]);
+
+        $this->assertThrows(fn () => $line->decrement('quantity'), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 1]);
     }
 }
