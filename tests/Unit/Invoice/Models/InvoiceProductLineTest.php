@@ -61,7 +61,7 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
-    public function test_rejects_non_positive_values_on_update(): void
+    public function test_rejects_invalid_amounts_on_update(): void
     {
         $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
 

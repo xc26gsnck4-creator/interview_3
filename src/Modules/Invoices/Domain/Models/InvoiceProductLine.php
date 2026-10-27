@@ -74,7 +74,7 @@ final class InvoiceProductLine extends Model
                 $value = $attributes[$field] ?? null;
 
                 if (! self::isValidAmount($value)) {
-                    throw InvalidProductLine::outOfRange($field, $value);
+                    throw InvalidProductLine::invalidAmount($field, $value);
                 }
             }
         };
