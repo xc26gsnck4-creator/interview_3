@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Invoice\Services;
 
-use Illuminate\Support\Str;
 use Modules\Invoices\Application\Services\FindInvoiceService;
-use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Models\Invoice;
 use Tests\TestCase;
 
@@ -24,18 +22,6 @@ final class FindInvoiceServiceTest extends TestCase
         self::assertSame(
             $invoice->productLines()->pluck('id')->all(),
             $found->productLines->pluck('id')->all(),
-        );
-    }
-
-    public function test_throws_not_found_for_unknown_id(): void
-    {
-        Invoice::factory()->create();
-        $unknownId = (string) Str::uuid7();
-
-        $this->assertThrows(
-            fn (): Invoice => $this->service()->handle($unknownId),
-            InvoiceNotFound::class,
-            sprintf('Invoice %s was not found.', $unknownId),
         );
     }
 

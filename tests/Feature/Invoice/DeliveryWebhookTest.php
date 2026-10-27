@@ -6,11 +6,8 @@ namespace Tests\Feature\Invoice;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Iterator;
 use Mockery\MockInterface;
-use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Models\Invoice;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -40,27 +37,17 @@ final class DeliveryWebhookTest extends TestCase
         $this->log->shouldNotHaveReceived('warning');
     }
 
-    /**
-     * @return Iterator<string, array{StatusEnum}>
-     */
-    public static function statusesOtherThanSending(): Iterator
+    public function test_delivered_webhook_for_invoice_not_in_sending_is_ignored_with_warning(): void
     {
-        yield 'draft' => [StatusEnum::Draft];
-        yield 'sent to client' => [StatusEnum::SentToClient];
-    }
-
-    #[DataProvider('statusesOtherThanSending')]
-    public function test_delivered_webhook_for_invoice_not_in_sending_is_ignored_with_warning(StatusEnum $status): void
-    {
-        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
+        $invoice = Invoice::factory()->withLines()->sentToClient()->create();
 
         $response = $this->getJson($this->deliveredHook($invoice->id));
 
         $response->assertNoContent();
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
         $this->log->shouldHaveReceived('warning', ['Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoice->id,
-            'reason' => sprintf('Invoice %s cannot move from %s to sent-to-client.', $invoice->id, $status->value),
+            'reason' => sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $invoice->id),
         ]]);
     }
 

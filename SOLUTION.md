@@ -25,7 +25,7 @@ src/Modules/Invoices/
                      JSON resources, routes
 ```
 
-Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: the runtime guards (strict Eloquent outside production, no destructive database commands in production), `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
+Layer names mirror the Notifications module. There is no `Api/` folder because nothing outside the module consumes it. The listener sits in Infrastructure: it is glue to another module's event. `app/` holds only framework glue that names no module: strict Eloquent outside production, `App\Database\SQLiteConnection` and `App\Exceptions\DatabaseLockedRenderer` (decisions 7 and 9).
 
 SQLite is the project's only database, and the design targets it alone: `config/database.php` keeps only the `sqlite` connection, and decisions 3, 7 and 9 answer SQLite's locking. ([#11])
 
@@ -60,10 +60,10 @@ flowchart TD;
 
 ## Testing strategy
 
-Each test sits at the layer that owns the behaviour and runs on a real SQLite engine (in memory, or a temporary file where locks matter). Apart from the notification facade, little is replaced.
+Each decision is tested in full at the layer that makes it, and each layer above keeps at most one case of it, which proves that the layer calls the rule and maps its result; the end-to-end lifecycle stories come on top and do not count as a layer. The tests run on a real SQLite engine (in memory, or a temporary file where locks matter), and apart from the notification facade little is replaced.
 
 - **Models** (`tests/Unit/Invoice/Models`): every rule and transition: draft-only creation, the line amounts at their bounds, totals and their overflow, the send rule's order of checks, and each transition from every status. The atomic claim stands in for a concurrency test: two instances of the same invoice claim it, the stale second one's conditional update hits zero rows and throws, and the row moves once.
-- **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification, a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
+- **Services** (`tests/Unit/Invoice/Services`, `Listeners`): the orchestration with a fake facade. Nothing is notified when a rule fails, the invoice is draft after a failed notification (an `\Error` included), a failure after `notify()` becomes `SendNotRecorded`, and the delivery runs in its own transaction. For the listener: the exact warning, and that an unexpected error propagates.
 - **HTTP** (`tests/Feature/Invoice/Http`, `DeliveryWebhookTest`): status codes and response bodies, validation (each 422 leaves nothing stored), exact error bodies, and the real webhook route with real event dispatch and no `Event::fake`, so a missing listener registration fails.
 - **Lifecycle** (`InvoiceLifecycleTest`): three end-to-end stories through the real routes, with only the facade faked (the log is a spy and reported exceptions are captured, so the tests can assert on them): the happy path delivered with the reference taken from the recorded notification, a delivery before the send, and a retry after a failed notification. Each step is read back through show.
 - **Real locks** (`SqliteTransactionsTest`, `DatabaseLockedTest`): separate connections on a temporary file prove that `IMMEDIATE` waits at `BEGIN` and that a failed commit is rolled back and releases the lock. Over HTTP they produce the busy 503 with nothing written, and the not-recorded 500 behind a reader.
@@ -71,6 +71,8 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 - **Architecture:** phpat rules, static and run by PHPStan: classes `final`, DTOs `readonly`, one public `handle()` per service, Domain depends only on itself, Eloquent, its factories and PHP, and the checked part of the layer and module map above.
 
 ## Failure behaviour
+
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)).
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -84,14 +86,13 @@ Each test sits at the layer that owns the behaviour and runs on a real SQLite en
 | Not a uuid | 404, JSON whatever the `Accept` header | – | [`ShowInvoiceTest`] |
 | **Send** `POST /api/invoices/{id}/send` | | | |
 | Unknown id | 404 | – | [`SendInvoiceTest`] |
-| Invoice in `sending` or `sent-to-client` | 409 | unchanged | [`SendInvoiceTest`] |
-| Second send of the same invoice | 409, one notification in total | `sending` | [`SendInvoiceTest`] |
+| Invoice in `sending` or `sent-to-client`, such as a second send | 409, nothing notified again | unchanged | [`SendInvoiceTest`] |
 | No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
 | The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
 | The commit fails after the notification | 500, reported; sending again notifies again | `draft` | [`DatabaseLockedTest`] |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
-| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`DeliveryWebhookTest`], [`InvoiceLifecycleTest`] |
+| Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
 | Duplicate delivery | 204, warning logged | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Unknown invoice | 204, warning logged | – | [`DeliveryWebhookTest`] |
 | **Any `/api` route** | | | |

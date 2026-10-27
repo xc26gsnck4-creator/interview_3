@@ -6,14 +6,12 @@ namespace Tests\Unit\Invoice\Services;
 
 use Error;
 use Illuminate\Database\ConnectionInterface;
-use Illuminate\Support\Str;
 use Iterator;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
 use Modules\Invoices\Application\Exceptions\SendNotRecorded;
 use Modules\Invoices\Application\Services\SendInvoiceService;
 use Modules\Invoices\Domain\Enums\StatusEnum;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
-use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotSendable;
 use Modules\Invoices\Domain\Models\Invoice;
 use Modules\Invoices\Domain\Models\InvoiceProductLine;
@@ -61,19 +59,6 @@ final class SendInvoiceServiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
     }
 
-    public function test_throws_not_found_for_unknown_id(): void
-    {
-        Invoice::factory()->withLines()->create();
-        $unknownId = (string) Str::uuid7();
-
-        $this->assertThrows(
-            fn (): Invoice => $this->service()->handle($unknownId),
-            InvoiceNotFound::class,
-            sprintf('Invoice %s was not found.', $unknownId),
-        );
-        self::assertSame([], $this->notifications->notified);
-    }
-
     public function test_rejects_draft_without_lines_and_does_not_notify(): void
     {
         $invoice = Invoice::factory()->create();
@@ -87,27 +72,17 @@ final class SendInvoiceServiceTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
-    /**
-     * @return Iterator<string, array{StatusEnum}>
-     */
-    public static function statusesOtherThanDraft(): Iterator
+    public function test_rejects_non_draft_and_does_not_notify(): void
     {
-        yield 'sending' => [StatusEnum::Sending];
-        yield 'sent to client' => [StatusEnum::SentToClient];
-    }
-
-    #[DataProvider('statusesOtherThanDraft')]
-    public function test_rejects_non_draft_and_does_not_notify(StatusEnum $status): void
-    {
-        $invoice = Invoice::factory()->withLines()->inStatus($status)->create();
+        $invoice = Invoice::factory()->withLines()->sending()->create();
 
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from %s to sending.', $invoice->id, $status->value),
+            sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
         );
         self::assertSame([], $this->notifications->notified);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
     }
 
     /**
