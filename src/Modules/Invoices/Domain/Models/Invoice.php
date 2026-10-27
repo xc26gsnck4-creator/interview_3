@@ -20,10 +20,11 @@ use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
 use Override;
 
 /**
- * Status is deliberately not fillable: mass assignment can never set it,
- * the creating hook pins draft, the updating hook rejects direct writes, and
- * the status transitions are the sanctioned way to change it. Quiet saves and
- * query-builder writes bypass model events, as Eloquent defines them.
+ * Status is deliberately not fillable: mass assignment can never set it, and
+ * the creating hook pins draft. After creation the status transitions are the
+ * only code that changes it; nothing on the model stops a direct assignment
+ * and save(). Quiet saves and query-builder writes bypass model events, as
+ * Eloquent defines them.
  *
  * @property string $id
  * @property string $customer_name
@@ -99,7 +100,7 @@ final class Invoice extends Model
      * The send rule, also usable as a dry check. The status is checked first.
      * The stored line amounts are checked again although model writes already
      * guarantee them, so the rule also catches a row written past the model
-     * events.
+     * events whose amount reads as an integer out of range.
      */
     public function ensureCanBeSent(): void
     {
@@ -141,23 +142,14 @@ final class Invoice extends Model
     }
 
     /**
-     * The creating hook closes the direct-assignment path on a new invoice
-     * ($invoice->status = ...; $invoice->save()), the updating hook on a stored
-     * one. getOriginal() is untyped, so the updating hook reads the stored
-     * status from a copy built from the original attributes.
+     * Rejects a non-draft status on create, including one assigned directly
+     * ($invoice->status = ...; $invoice->save()).
      */
     protected static function booted(): void
     {
         self::creating(static function (Invoice $invoice): void {
             if ($invoice->status !== StatusEnum::Draft) {
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
-            }
-        });
-        self::updating(static function (Invoice $invoice): void {
-            if ($invoice->isDirty('status')) {
-                $stored = $invoice->newInstance()->setRawAttributes($invoice->getRawOriginal());
-
-                throw InvalidInvoiceStatusTransition::directWrite($invoice->id, $stored->status, $invoice->status);
             }
         });
     }
@@ -197,14 +189,14 @@ final class Invoice extends Model
      * update is the atomic claim: of two instances holding the same status, only
      * one update matches the row, with no row lock (SQLite compiles lockForUpdate
      * to nothing). It runs on the base query with an explicit timestamp, so the
-     * instance gets exactly the updated_at the row got. It fires no model events,
-     * so syncing the original afterwards keeps a later save() on this instance
-     * from tripping the updating hook. A lost claim takes over only the stored
-     * status, leaving the instance's other attributes and relations alone. The
-     * re-read sees the current row: inside a transaction this connection holds
-     * SQLite's write lock by now, taken at BEGIN when transactions begin
-     * IMMEDIATE and by the zero-row update otherwise; outside one the update has
-     * already committed.
+     * instance gets exactly the updated_at the row got. The base query leaves the
+     * instance's original values alone, so the written ones are synced as
+     * original afterwards and a later save() does not write the status again.
+     * A lost claim takes over only the stored status, leaving the instance's
+     * other attributes and relations alone. The re-read sees the current row:
+     * inside a transaction this connection holds SQLite's write lock by now,
+     * taken at BEGIN when transactions begin IMMEDIATE and by the zero-row
+     * update otherwise; outside one the update has already committed.
      * Both queries run on this instance's connection.
      */
     private function transition(StatusEnum $from, StatusEnum $to): void
