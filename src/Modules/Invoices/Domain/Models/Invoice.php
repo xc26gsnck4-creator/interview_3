@@ -84,8 +84,9 @@ final class Invoice extends Model
     }
 
     /**
-     * The stored amounts are checked again, so a line written past the model
-     * events whose amount reads as an integer out of range cannot be sent.
+     * The stored amounts are checked again, as given, so a line written past
+     * the model events with an amount that is not an integer in range cannot
+     * be sent.
      */
     public function ensureCanBeSent(): void
     {
