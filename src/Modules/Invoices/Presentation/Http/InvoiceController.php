@@ -28,9 +28,7 @@ use Modules\Invoices\Presentation\Http\Resources\InvoiceResource;
  *
  * store(): lines whose total does not fit in int are a fault in the submitted
  * lines, so they answer the same validation error as any other bad line; the
- * invoice was rolled back, so the message names no id. Create is the only way
- * lines are stored, so show and send never meet an overflowing total; if one
- * were written past it, they would answer a reported 500.
+ * invoice was rolled back, so the message names no id.
  */
 final readonly class InvoiceController
 {
