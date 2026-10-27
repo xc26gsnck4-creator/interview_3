@@ -7,7 +7,7 @@ namespace Tests\Unit\Invoice\Services;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Modules\Invoices\Application\Services\MarkInvoiceDeliveredService;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Models\Invoice;
 use Tests\TestCase;
@@ -21,7 +21,7 @@ final class MarkInvoiceDeliveredServiceTest extends TestCase
         $delivered = $this->service()->handle($invoice->id);
 
         self::assertSame($invoice->id, $delivered->id);
-        self::assertSame(StatusEnum::SentToClient, $delivered->status);
+        self::assertSame(InvoiceStatus::SentToClient, $delivered->status);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
     }
 

@@ -346,7 +346,7 @@
                         "type": "string"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/InvoiceStatus"
                     },
                     "customer_name": {
                         "type": "string"
@@ -374,14 +374,14 @@
                 ],
                 "title": "InvoiceResource"
             },
-            "StatusEnum": {
+            "InvoiceStatus": {
                 "type": "string",
                 "enum": [
                     "draft",
                     "sending",
                     "sent-to-client"
                 ],
-                "title": "StatusEnum"
+                "title": "InvoiceStatus"
             }
         },
         "responses": {

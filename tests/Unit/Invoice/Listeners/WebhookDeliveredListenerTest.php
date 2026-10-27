@@ -65,7 +65,7 @@ final class WebhookDeliveredListenerTest extends TestCase
 
     /**
      * Only the two expected rejections are tolerated. A row written past the
-     * model with a status outside StatusEnum fails the enum cast, and that
+     * model with a status outside InvoiceStatus fails the enum cast, and that
      * error reaches the webhook instead of being logged as an ignored report.
      */
     public function test_lets_an_unexpected_error_propagate_without_a_warning(): void

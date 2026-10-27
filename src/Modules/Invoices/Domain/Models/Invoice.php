@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvalidInvoiceStatusTransition;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
@@ -27,7 +27,7 @@ use Override;
  * @property string $id
  * @property string $customer_name
  * @property string $customer_email
- * @property StatusEnum $status
+ * @property InvoiceStatus $status
  */
 #[Fillable(['customer_name', 'customer_email'])]
 final class Invoice extends Model
@@ -41,7 +41,7 @@ final class Invoice extends Model
      * @var array<string, mixed>
      */
     #[Override]
-    protected $attributes = ['status' => StatusEnum::Draft->value];
+    protected $attributes = ['status' => InvoiceStatus::Draft->value];
 
     /**
      * Ids are stored lowercase and SQLite compares them case-sensitively.
@@ -90,7 +90,7 @@ final class Invoice extends Model
      */
     public function ensureCanBeSent(): void
     {
-        $this->ensureStatusIs(StatusEnum::Draft, StatusEnum::Sending);
+        $this->ensureStatusIs(InvoiceStatus::Draft, InvoiceStatus::Sending);
 
         $lines = $this->load('productLines')->productLines;
 
@@ -110,12 +110,12 @@ final class Invoice extends Model
     public function markAsSending(): void
     {
         $this->ensureCanBeSent();
-        $this->transition(StatusEnum::Draft, StatusEnum::Sending);
+        $this->transition(InvoiceStatus::Draft, InvoiceStatus::Sending);
     }
 
     public function markAsSentToClient(): void
     {
-        $this->transition(StatusEnum::Sending, StatusEnum::SentToClient);
+        $this->transition(InvoiceStatus::Sending, InvoiceStatus::SentToClient);
     }
 
     /**
@@ -123,19 +123,19 @@ final class Invoice extends Model
      */
     protected function casts(): array
     {
-        return ['status' => StatusEnum::class];
+        return ['status' => InvoiceStatus::class];
     }
 
     protected static function booted(): void
     {
         self::creating(static function (Invoice $invoice): void {
-            if ($invoice->status !== StatusEnum::Draft) {
+            if ($invoice->status !== InvoiceStatus::Draft) {
                 throw InvoiceMustBeCreatedAsDraft::withStatus($invoice->status);
             }
         });
     }
 
-    private function ensureStatusIs(StatusEnum $from, StatusEnum $to): void
+    private function ensureStatusIs(InvoiceStatus $from, InvoiceStatus $to): void
     {
         if ($this->status !== $from) {
             throw InvalidInvoiceStatusTransition::create($this->id, $this->status, $to);
@@ -147,7 +147,7 @@ final class Invoice extends Model
      * same status only one update matches the row, and SQLite has no row lock
      * to take instead (lockForUpdate compiles to nothing).
      */
-    private function transition(StatusEnum $from, StatusEnum $to): void
+    private function transition(InvoiceStatus $from, InvoiceStatus $to): void
     {
         $this->ensureStatusIs($from, $to);
 

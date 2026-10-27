@@ -6,7 +6,7 @@ namespace Database\Factories\Modules\Invoices\Domain\Models;
 
 use Illuminate\Database\Eloquent\Factories\Attributes\UseModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Models\Invoice;
 
 /**
@@ -35,18 +35,18 @@ final class InvoiceFactory extends Factory
 
     public function sending(): self
     {
-        return $this->inStatus(StatusEnum::Sending);
+        return $this->inStatus(InvoiceStatus::Sending);
     }
 
     public function sentToClient(): self
     {
-        return $this->inStatus(StatusEnum::SentToClient);
+        return $this->inStatus(InvoiceStatus::SentToClient);
     }
 
     /**
      * A test-only shortcut past the transitions.
      */
-    public function inStatus(StatusEnum $status): self
+    public function inStatus(InvoiceStatus $status): self
     {
         return $this->afterCreating(static function (Invoice $invoice) use ($status): void {
             $invoice->forceFill(['status' => $status])->save();

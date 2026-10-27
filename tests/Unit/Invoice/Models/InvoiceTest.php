@@ -7,7 +7,7 @@ namespace Tests\Unit\Invoice\Models;
 use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Modules\Invoices\Domain\Enums\StatusEnum;
+use Modules\Invoices\Domain\Enums\InvoiceStatus;
 use Modules\Invoices\Domain\Exceptions\InvoiceMustBeCreatedAsDraft;
 use Modules\Invoices\Domain\Exceptions\InvoiceNotFound;
 use Modules\Invoices\Domain\Exceptions\InvoiceTotalOverflow;
@@ -49,7 +49,7 @@ final class InvoiceTest extends TestCase
             Model::preventSilentlyDiscardingAttributes();
         }
 
-        self::assertSame(StatusEnum::Draft, $invoice->fresh()?->status);
+        self::assertSame(InvoiceStatus::Draft, $invoice->fresh()?->status);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
 
@@ -72,7 +72,7 @@ final class InvoiceTest extends TestCase
     public function test_new_invoice_cannot_be_saved_with_a_non_draft_status(): void
     {
         $invoice = new Invoice(['customer_name' => 'Acme', 'customer_email' => 'billing@acme.test']);
-        $invoice->status = StatusEnum::Sending;
+        $invoice->status = InvoiceStatus::Sending;
 
         $this->assertThrows(
             fn () => $invoice->save(),
