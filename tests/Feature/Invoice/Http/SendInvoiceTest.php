@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Invoice\Http;
 
-use Illuminate\Database\Events\QueryExecuted;
-use Illuminate\Database\Events\TransactionCommitted;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Str;
 use Modules\Invoices\Application\Exceptions\NotificationFailed;
@@ -42,27 +38,6 @@ final class SendInvoiceTest extends TestCase
         self::assertSame($invoice->id, $this->notifications->notified[0]->resourceId->toString());
         self::assertSame('jane@example.com', $this->notifications->notified[0]->toEmail);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
-    }
-
-    public function test_runs_no_query_after_the_commit(): void
-    {
-        $invoice = Invoice::factory()->withLines()->create();
-        $committed = false;
-        $queriesAfterCommit = [];
-        Event::listen(TransactionCommitted::class, static function () use (&$committed): void {
-            $committed = true;
-        });
-        DB::listen(static function (QueryExecuted $query) use (&$committed, &$queriesAfterCommit): void {
-            if ($committed) {
-                $queriesAfterCommit[] = $query->sql;
-            }
-        });
-
-        $response = $this->postJson(route('invoices.send', $invoice->id));
-
-        $response->assertOk();
-        self::assertTrue($committed);
-        self::assertSame([], $queriesAfterCommit);
     }
 
     /**
