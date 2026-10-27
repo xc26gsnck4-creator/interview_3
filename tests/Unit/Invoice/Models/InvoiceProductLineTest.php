@@ -61,11 +61,25 @@ final class InvoiceProductLineTest extends TestCase
         $this->assertDatabaseCount('invoice_product_lines', 0);
     }
 
-    public function test_rejects_invalid_amounts_on_update(): void
+    /**
+     * The fraction keeps the stored integer part: Eloquent's dirty comparison
+     * reads both through the cast and sees no change, so only a check that
+     * runs before it, on saving, can reject the value.
+     *
+     * @return Iterator<string, array{int, int|float}>
+     */
+    public static function invalidAmountsOnUpdate(): Iterator
     {
-        $line = InvoiceProductLine::factory()->create(['quantity' => 2]);
+        yield 'zero' => [2, 0];
+        yield 'fraction with the stored integer part' => [1, 1.5];
+    }
 
-        $this->assertThrows(fn () => $line->update(['quantity' => 0]), InvalidProductLine::class);
-        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => 2]);
+    #[DataProvider('invalidAmountsOnUpdate')]
+    public function test_rejects_invalid_amounts_on_update(int $stored, int|float $value): void
+    {
+        $line = InvoiceProductLine::factory()->create(['quantity' => $stored]);
+
+        $this->assertThrows(fn () => $line->update(['quantity' => $value]), InvalidProductLine::class);
+        $this->assertDatabaseHas('invoice_product_lines', ['id' => $line->id, 'quantity' => $stored]);
     }
 }
