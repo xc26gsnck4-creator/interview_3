@@ -47,7 +47,7 @@ final class DeliveryWebhookTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sent-to-client']);
         $this->log->shouldHaveReceived('warning', ['Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoice->id,
-            'reason' => sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $invoice->id),
+            'reason' => sprintf('Invoice %s cannot move to sent-to-client: its status is sent-to-client, not sending.', $invoice->id),
         ]]);
     }
 

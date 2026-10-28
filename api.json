@@ -1,7 +1,7 @@
 {
     "openapi": "3.1.2",
     "info": {
-        "title": "Laravel",
+        "title": "Invoices",
         "version": "0.0.1"
     },
     "servers": [

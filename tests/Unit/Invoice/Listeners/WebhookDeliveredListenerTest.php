@@ -55,7 +55,7 @@ final class WebhookDeliveredListenerTest extends TestCase
         $invoice = Invoice::factory()->create();
         $this->logger->expects($this->once())->method('warning')->with('Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoice->id,
-            'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
+            'reason' => sprintf('Invoice %s cannot move to sent-to-client: its status is draft, not sending.', $invoice->id),
         ]);
 
         $this->listener()->handle($this->deliveredEvent($invoice->id));

@@ -1,8 +1,7 @@
 {
-    "name": "laravel/laravel",
+    "name": "interview-task/invoices",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Invoices module for the interview task: create, show and send an invoice, delivered through the Notifications module.",
     "license": "MIT",
     "require": {
         "php": "^8.5",
@@ -58,7 +57,7 @@
         "phpstan": "rm -rf /tmp/phpstan-interview-task && phpstan analyse --no-progress --memory-limit=1G",
         "api:export": [
             "@php artisan config:clear",
-            "@putenv APP_NAME=Laravel",
+            "@putenv APP_NAME=Invoices",
             "@putenv APP_URL=http://localhost",
             "@putenv API_VERSION=0.0.1",
             "@php artisan scramble:export --fail-on-unknown"

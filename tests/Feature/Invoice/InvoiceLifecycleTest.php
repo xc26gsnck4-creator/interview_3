@@ -106,7 +106,7 @@ final class InvoiceLifecycleTest extends TestCase
         $this->assertStatus($invoiceId, 'draft');
         $this->log->shouldHaveReceived('warning', ['Ignoring delivery webhook for invoice', [
             'invoice_id' => $invoiceId,
-            'reason' => sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoiceId),
+            'reason' => sprintf('Invoice %s cannot move to sent-to-client: its status is draft, not sending.', $invoiceId),
         ]]);
 
         $this->sendInvoice($invoiceId);

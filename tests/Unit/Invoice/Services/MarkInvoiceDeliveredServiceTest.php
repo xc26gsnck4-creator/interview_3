@@ -32,7 +32,7 @@ final class MarkInvoiceDeliveredServiceTest extends TestCase
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from draft to sent-to-client.', $invoice->id),
+            sprintf('Invoice %s cannot move to sent-to-client: its status is draft, not sending.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
