@@ -75,7 +75,7 @@ Each decision is tested in full at the layer that makes it, and each layer above
 
 ## Failure behaviour
 
-The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except decision 8's 500, Laravel's default, marked –.
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except the 500s marked –: decision 8's, and the one for rows written past the create service, both Laravel's default for an exception the module does not map.
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -87,12 +87,14 @@ The Test column names the tests that check the response. Where a row lists sever
 | **Show** `GET /api/invoices/{id}` | | | |
 | Unknown id | 404 | – | [`ShowInvoiceTest`] |
 | Not a uuid | 404, JSON whatever the `Accept` header | – | [`ShowInvoiceTest`] |
+| A stored line whose amount is not an integer from 1 to 2,147,483,647, or lines whose total overflows PHP's int (both written past the create service, see [Known limitations](#known-limitations)) | 500, reported | unchanged | – |
 | **Send** `POST /api/invoices/{id}/send` | | | |
 | Unknown id | 404 | – | [`SendInvoiceTest`] |
 | Invoice in `sending` or `sent-to-client`, such as a second send | 409, nothing notified again | unchanged | [`SendInvoiceTest`] |
 | No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
 | The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
 | The commit fails after the notification | 500, reported; sending again notifies again | `draft` | – |
+| Lines whose total overflows PHP's int (written past the create service) | 500, reported; the claim is rolled back, nothing notified | `draft` | – |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
