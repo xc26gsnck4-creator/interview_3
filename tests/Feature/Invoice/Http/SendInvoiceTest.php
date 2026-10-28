@@ -77,7 +77,7 @@ final class SendInvoiceTest extends TestCase
 
         $first->assertOk();
         $second->assertConflict()->assertExactJson([
-            'message' => sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
+            'message' => sprintf('Invoice %s cannot move to sending: its status is sending, not draft.', $invoice->id),
         ]);
         self::assertCount(1, $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);

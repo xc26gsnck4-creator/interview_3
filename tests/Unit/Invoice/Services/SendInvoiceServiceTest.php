@@ -76,7 +76,7 @@ final class SendInvoiceServiceTest extends TestCase
         $this->assertThrows(
             fn (): Invoice => $this->service()->handle($invoice->id),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
+            sprintf('Invoice %s cannot move to sending: its status is sending, not draft.', $invoice->id),
         );
         self::assertSame([], $this->notifications->notified);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);

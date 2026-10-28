@@ -21,7 +21,7 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <server name="APP_NAME" value="Laravel" force="true"/>
+        <server name="APP_NAME" value="Invoices" force="true"/>
         <server name="APP_URL" value="http://localhost" force="true"/>
         <server name="APP_DEBUG" value="false" force="true"/>
         <server name="API_VERSION" value="0.0.1" force="true"/>

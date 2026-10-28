@@ -92,7 +92,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->ensureCanBeSent(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from %s to sending.', $invoice->id, $status->value),
+            sprintf('Invoice %s cannot move to sending: its status is %s, not draft.', $invoice->id, $status->value),
         );
     }
 
@@ -119,7 +119,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->markAsSending(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from %s to sending.', $invoice->id, $status->value),
+            sprintf('Invoice %s cannot move to sending: its status is %s, not draft.', $invoice->id, $status->value),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
     }
@@ -172,7 +172,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->markAsSentToClient(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from %s to sent-to-client.', $invoice->id, $status->value),
+            sprintf('Invoice %s cannot move to sent-to-client: its status is %s, not sending.', $invoice->id, $status->value),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => $status->value]);
     }
@@ -194,7 +194,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $second->markAsSending(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sending to sending.', $first->id),
+            sprintf('Invoice %s cannot move to sending: its status is sending, not draft.', $first->id),
         );
         self::assertSame(InvoiceStatus::Sending, $second->status);
         self::assertSame(InvoiceStatus::Sending, $first->fresh()?->status);
@@ -210,7 +210,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $second->markAsSentToClient(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $first->id),
+            sprintf('Invoice %s cannot move to sent-to-client: its status is sent-to-client, not sending.', $first->id),
         );
         self::assertSame(InvoiceStatus::SentToClient, $second->status);
         self::assertSame(InvoiceStatus::SentToClient, $first->fresh()?->status);
@@ -253,7 +253,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->markAsSending(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sending to sending.', $invoice->id),
+            sprintf('Invoice %s cannot move to sending: its status is sending, not draft.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'draft']);
     }
@@ -277,7 +277,7 @@ final class InvoiceTransitionsTest extends TestCase
         $this->assertThrows(
             fn () => $invoice->markAsSentToClient(),
             InvalidInvoiceStatusTransition::class,
-            sprintf('Invoice %s cannot move from sent-to-client to sent-to-client.', $invoice->id),
+            sprintf('Invoice %s cannot move to sent-to-client: its status is sent-to-client, not sending.', $invoice->id),
         );
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'status' => 'sending']);
     }
