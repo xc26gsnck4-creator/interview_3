@@ -17,10 +17,12 @@ use Tests\TestCase;
  * to, so both of the provider's bindings are exercised. The other send tests
  * fake the facade itself, so this is the one place where a wrong argument in
  * the facade or a binding missing from the provider's register() shows. The
- * provider is deferred, but the test bootstrap runs the console kernel, which
- * loads every deferred provider, so no later register() drops the fake; for the
- * same reason an entry missing from provides() would not show here.
- * DeliveryWebhookTest covers the other direction, Notifications to Invoices.
+ * fake is keyed under the concrete class, which the provider never rebinds, so
+ * it survives whenever register() runs. The provider is deferred, but the test
+ * bootstrap runs the console kernel, which loads every deferred provider and
+ * empties the deferred map, so an entry missing from provides() would not show
+ * here. DeliveryWebhookTest covers the other direction, Notifications to
+ * Invoices.
  */
 final class SendInvoiceNotificationTest extends TestCase
 {
