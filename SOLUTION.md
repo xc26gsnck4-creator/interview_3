@@ -50,7 +50,7 @@ flowchart TD;
 ## Decisions
 
 1. **Eloquent models are the domain.** `Invoice` and `InvoiceProductLine` carry the rules; the services use them directly. Why: for one aggregate on the task's two tables, a repository would only forward to Eloquent. A second aggregate, a second store or a rule that must run without the database would change that. Instead of: a repository interface declared in the Domain, an Eloquent implementation in Infrastructure over the models moved there, a mapper to plain entities, and Eloquent dropped from the Domain's phpat rule. Today that would be an interface, an implementation, a mapper and two entities over the same two tables. ([#2], [#32])
-2. **Every rule and both transitions live on the models.** A new invoice is always `draft` (the default; a `creating` listener rejects any other status), quantity and unit price are `Amount` value objects that Eloquent's cast builds at assignment from the value as given, so a fraction or a numeric string is rejected instead of truncated, and `markAsSending()` runs the send rule itself. The one rule a caller invokes is the total check: the create service computes `totalPrice()` over the lines it has just stored, and an overflow rolls the invoice back. Create is the only endpoint that stores lines, so the send rule does not repeat it. Why: no service can create an invoice outside draft, store an invalid line or send an invoice the README forbids sending. Instead of: rules in the form request or the services. ([#2], [#9], [#30], [#34])
+2. **Every rule and both transitions live on the models.** A new invoice is always `draft` (the default; a `creating` listener rejects any other status), quantity and unit price are `Amount` value objects that Eloquent's cast builds at assignment from the value as given, so a fraction or a numeric string is rejected instead of truncated, and `markAsSending()` runs the send rule itself. The one rule a caller invokes is the total check: the create service computes `totalPrice()` over the lines it has just stored, and an overflow rolls the invoice back. Create is the only endpoint that stores lines, so the send rule does not repeat it; the send computes `totalPrice()` only for the email's text (an overflow there: see [Known limitations](#known-limitations)). Why: no service can create an invoice outside draft, store an invalid line or send an invoice the README forbids sending. Instead of: rules in the form request or the services. ([#2], [#9], [#30], [#34])
 3. **Transitions are atomic conditional updates.** `UPDATE … SET status = 'sending' WHERE id = ? AND status = 'draft'`: zero affected rows means another request won, so 409 and no email; the 409 body names the status found and the one the transition needs. `sending → sent-to-client` works the same way. Why: SQLite compiles `lockForUpdate()` to nothing, so a row lock would silently not exist. Instead of: `lockForUpdate()`. ([#9])
 4. **Strict services, tolerant listener.** The services throw. Only `WebhookDeliveredListener` catches "unknown invoice" and "not in `sending`", logs a warning with the id and the reason, and returns. Why: the webhook belongs to the provider and must not fail because of the invoice's state, while the services stay reusable. Instead of: services that swallow errors, or a webhook that answers 4xx. ([#14])
 5. **Notify inside the transaction, then commit.** Claim `draft → sending`, call `NotificationFacadeInterface::notify()`, commit. A throwing notification rolls the claim back. Why: a committed `sending` then means the notification went out, which is the README's "change the status after sending". Instead of: committing the claim first and compensating with `sending → draft`, or an outbox (see [Known limitations](#known-limitations)). ([#12])
@@ -75,7 +75,7 @@ Each decision is tested in full at the layer that makes it, and each layer above
 
 ## Failure behaviour
 
-The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except decision 8's 500, Laravel's default, marked –.
+The Test column names the tests that check the response. Where a row lists several causes, they check one of them; every cause is tested in full where it is decided (see [Testing strategy](#testing-strategy)), except the 500s marked –: decision 8's, and the one for rows written past the create service, both Laravel's default for an exception the module does not map.
 
 | Condition | HTTP | Invoice afterwards | Test |
 |---|---|---|---|
@@ -87,12 +87,14 @@ The Test column names the tests that check the response. Where a row lists sever
 | **Show** `GET /api/invoices/{id}` | | | |
 | Unknown id | 404 | – | [`ShowInvoiceTest`] |
 | Not a uuid | 404, JSON whatever the `Accept` header | – | [`ShowInvoiceTest`] |
+| A stored line whose amount is not an integer from 1 to 2,147,483,647, or lines whose total overflows PHP's int (both written past the create service, see [Known limitations](#known-limitations)) | 500, reported | unchanged | – |
 | **Send** `POST /api/invoices/{id}/send` | | | |
 | Unknown id | 404 | – | [`SendInvoiceTest`] |
 | Invoice in `sending` or `sent-to-client`, such as a second send | 409, nothing notified again | unchanged | [`SendInvoiceTest`] |
 | No lines, an invalid stored line | 422 | `draft`, nothing notified | [`SendInvoiceTest`] |
 | The notification throws (an exception or an `\Error`) | 503, `NotificationFailed`'s message only | `draft` | [`SendInvoiceTest`], [`InvoiceLifecycleTest`] |
 | The commit fails after the notification | 500, reported; sending again notifies again | `draft` | – |
+| Lines whose total overflows PHP's int (written past the create service) | 500, reported; the claim is rolled back, nothing notified | `draft` | – |
 | **Delivery webhook** `GET /api/notification/hook/delivered/{id}` | | | |
 | Invoice in `sending` | 204 | `sent-to-client` | [`DeliveryWebhookTest`] |
 | Invoice in `draft` (delivery before the send) | 204, warning logged | `draft` | [`InvoiceLifecycleTest`] |
