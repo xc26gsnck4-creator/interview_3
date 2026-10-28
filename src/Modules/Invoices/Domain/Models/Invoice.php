@@ -135,6 +135,10 @@ final class Invoice extends Model
         });
     }
 
+    /**
+     * Reads the status the instance holds, so an instance left stale by a
+     * rolled-back claim is refused, and named as it is, until it is reloaded.
+     */
     private function ensureStatusIs(InvoiceStatus $from, InvoiceStatus $to): void
     {
         if ($this->status !== $from) {
