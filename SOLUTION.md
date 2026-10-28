@@ -126,7 +126,7 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The `app` image is built from `docker/8.5` in the repository (Sail's PHP 8.5 runtime, published unchanged), so a fresh clone needs nothing installed first; `start.sh` differs from the supplied script in two commented lines and still resets the database on every run (`migrate:fresh`). The commands run through Laravel Sail; any `composer` script below also runs as `docker compose exec -u sail app composer <script>` (`-u sail` runs it as the app's user, as Sail does, instead of root).
+Set up with `./start.sh` as the README says. The `app` image is built from `docker/8.5` in the repository (Sail's PHP 8.5 runtime, published unchanged: `diff -r vendor/laravel/sail/runtimes/8.5 docker/8.5` is empty), so a fresh clone needs nothing beyond Docker installed first; `start.sh` differs from the supplied script in two lines, each with a comment above it, and still resets the database on every run (`migrate:fresh`). The commands run through Laravel Sail; any `composer` script below also runs as `docker compose exec -u sail app composer <script>` (`-u sail` runs it as the app's user, as Sail does, instead of root).
 
 | Command | What it checks | Note |
 |---|---|---|

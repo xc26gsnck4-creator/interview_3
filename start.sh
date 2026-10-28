@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Not cp -n: BSD cp (macOS) exits 1 when .env exists, and set -e would stop here.
+# Not cp -n: some cp versions (BSD cp on macOS among them) exit 1 when .env exists,
+# and set -e would stop here.
 [ -f .env ] || cp .env.example .env
 touch database/database.sqlite
 
