@@ -126,7 +126,7 @@ Decision 5 was confirmed knowing these consequences:
 
 ## Running the checks
 
-Set up with `./start.sh` as the README says. The commands run through Laravel Sail; any `composer` script below also runs as `docker compose exec -u sail app composer <script>` (`-u sail` runs it as the app's user, as Sail does, instead of root).
+Set up with `./start.sh` as the README says. The `app` image is built from `docker/8.5` in the repository (Sail's PHP 8.5 runtime, published), so a fresh clone needs nothing installed first. `start.sh` differs from the supplied script in two lines: the app restarts after `composer install`, because its server had started without `vendor/` and stayed down, and `.env` is copied only when missing, because macOS's `cp -n` exits 1 and stopped every run after the first. The script still resets the database on every run (`migrate:fresh`). The commands run through Laravel Sail; any `composer` script below also runs as `docker compose exec -u sail app composer <script>` (`-u sail` runs it as the app's user, as Sail does, instead of root).
 
 | Command | What it checks | Note |
 |---|---|---|
